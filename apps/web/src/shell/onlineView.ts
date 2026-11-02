@@ -62,6 +62,33 @@ export interface LobbyView {
   rules?: string;
 }
 
+/**
+ * The lobby's words for being ready, the same on every device (UX-21: the phone said Wait and Start,
+ * the desktop Not ready and Start now).
+ */
+export const READY_WORDS = { ready: 'Ready', notReady: 'Not ready', youReady: "You're ready", start: 'Start now' } as const;
+
+/**
+ * Ready, as the lobby shows it: a bot always is (the match never waits for one), and so is the host,
+ * who has no Ready of their own: they start the match (UX-21).
+ */
+export function isReady(p: Pick<LobbyPlayer, 'ready' | 'isBot' | 'host'>): boolean {
+  return p.ready || p.isBot || p.host;
+}
+
+/** The people in the room and how many of them are ready (bots aren't counted: they always are). */
+export function readyCount(players: readonly LobbyPlayer[]): { ready: number; people: number } {
+  const people = players.filter((p) => !p.isBot);
+  return { ready: people.filter(isReady).length, people: people.length };
+}
+
+/** "1 of 2 players ready", and " · bots are always ready" when the roster has bots (`bots`). */
+export function readyLine(players: readonly LobbyPlayer[], bots = true): string {
+  const { ready, people } = readyCount(players);
+  const count = `${ready} of ${people} ${people === 1 ? 'player' : 'players'} ready`;
+  return bots && players.some((p) => p.isBot) ? `${count} · bots are always ready` : count;
+}
+
 let rulesFor: Tuning | null = null;
 let rulesBase: Tuning | null = null;
 let rulesText = '';

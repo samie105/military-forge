@@ -11,7 +11,7 @@ import { PHONE_QUERY, isPhoneLayout } from './layout';
 import { PhoneHome } from './PhoneHome';
 import { PhoneJoin } from './PhoneJoin';
 import { PhoneLanAddPlayer, PhoneLanJoin } from './PhoneLan';
-import { PhoneLobby } from './PhoneLobby';
+import { PhoneLobby, phoneOrder } from './PhoneLobby';
 import { PhoneNameEntry } from './PhoneNameEntry';
 import { PhonePause } from './PhonePause';
 import { PhoneResults, resultText } from './PhoneResults';
@@ -155,35 +155,62 @@ describe('m-lobby', () => {
     botLevel: 'normal',
   });
 
-  it('the host: the code, the share poster first with the QR, the roster (bots ready, no [BOT] tag), the rules, Ready and Start', () => {
+  it('the host: the code, a compact share card (Share link, the QR behind Show QR), the roster (bots ready, no [BOT] tag), the rules, Start now', () => {
     const html = withCtl(ctl(), <PhoneLobby lobby={lobby(true)} />);
     expect(html).toContain('data-screen="m-lobby"');
     expect(html).toMatch(/data-active-state="host not-ready link-idle"/);
     expect(html).toMatch(/pm-code[^>]*>KMTXRA</);
-    expect(textOf(html)).toContain('Share room link');
-    expect(html).toContain('abc.trycloudflare.com/r/KMTXRA');
-    expect(html).toMatch(/<svg viewBox="0 0 \d+ \d+"/); // a real QR
+    // UX-23: the left column's card has the code as its headline, Share link in volt, the QR folded away
+    const side = html.slice(html.indexOf('class="pm-lobby__side"'), html.indexOf('pm-roster'));
+    expect(side).toMatch(/<b class="display pm-sharecard__code num"[^>]*>KMTXRA<\/b>/);
+    expect(side).toMatch(/<button type="button" class="btn btn--volt pm-sharecard__share m-p8">(?:(?!<\/button>).)*Share link<\/button>/);
+    expect(side).toMatch(/aria-pressed="false" aria-controls="pm-room-qr" aria-label="Show QR"/);
+    expect(side).not.toContain('class="qr"');
     expect(html).toContain('>Kestrel<');
     expect(html).not.toContain('[BOT]');
-    expect(html.match(/prow__ready is-ready/g)).toHaveLength(2); // Kemi, and the bot
+    // the host starts it, so reads Ready (UX-21): Ade, Kemi and the bot
+    expect(html.match(/prow__ready is-ready/g)).toHaveLength(3);
+    expect(textOf(html)).toContain('2 of 2 players ready · bots are always ready');
     expect(html).toContain('5 min · 20 kills');
     // the room's map by its poster beside its name
     expect(html).toMatch(/<img class="mapart pm-mission__art" src="\/assets\/posters\/lunar-outpost-card\.webp"[^>]*><b data-bind="lobby\.map\.name">Lunar Outpost</);
-    expect(html).toContain('Start');
     // the LAN link and time of day aren't known to the app: not shown (no fake 192.168…)
     expect(html).not.toContain('Same Wi-Fi');
   });
 
-  it('a guest: no Start; the rules read-only', () => {
-    const html = withCtl(ctl(), <PhoneLobby lobby={lobby(false)} />);
-    expect(html).toMatch(/data-active-state="guest not-ready link-idle"/);
-    expect(html).not.toContain('>Start<');
+  it('the host has one action, Start now, volt and across the column; no Ready (UX-21)', () => {
+    const html = withCtl(ctl(), <PhoneLobby lobby={lobby(true)} />);
+    const bar = html.slice(html.indexOf('class="pm-bar pm-bar--go"'));
+    expect(bar).toMatch(/^class="pm-bar pm-bar--go"><button type="button" class="btn btn--volt m-p8 mf-glow" data-pad-first="true"[^>]*>(?:(?!<\/button>).)*Start now<\/button><\/div>/);
+    expect(textOf(html)).not.toMatch(/Ready(?! ·)(?!Kemi|Kestrel|Lunar)/);
+    expect(html).not.toMatch(/>(Ready|Not ready|Wait)<\/button>/);
+    expect(html).not.toContain('>Wait<');
   });
 
-  it('the rules and Ready/Start share one footer (it sticks to the bottom at large text, so the rules stay on screen)', () => {
+  it('a guest: Ready (volt), then the "You\'re ready" stamp with Not ready; no Start; the same words as the desktop', () => {
+    const html = withCtl(ctl(), <PhoneLobby lobby={lobby(false)} />);
+    expect(html).toMatch(/data-active-state="guest not-ready link-idle"/);
+    expect(html).not.toContain('Start now');
+    expect(html).toMatch(/<div class="pm-bar pm-bar--go"><button type="button" class="btn btn--volt m-p8" data-pad-first="true">(?:(?!<\/button>).)*Ready<\/button><\/div>/);
+    const notReady = withCtl(ctl(), <PhoneLobby lobby={{ ...lobby(false), players: lobby(false).players.map((p) => (p.you ? { ...p, ready: false } : p)) }} />);
+    expect(notReady).toContain('Not ready</span>');
+    expect(textOf(notReady)).toContain('1 of 2 players ready · bots are always ready');
+    const ready = withCtl(ctl(), <PhoneLobby lobby={{ ...lobby(false), ready: true }} />);
+    expect(ready).toMatch(/<span class="stamp stamp--ok pm-ready m-p7" role="status">(?:(?!<\/span>).)*You&#x27;re ready<\/span><button type="button" class="btn btn--ghost btn--sm pm-unready m-p8" data-pad-first="true">Not ready<\/button>/);
+  });
+
+  it('the roster puts the host, then you, then the other people, then the bots (a guest sees their own row)', () => {
+    const bot = { id: 3, name: '[BOT] Mantis', ready: false, host: false, you: false, isBot: true, pingMs: -1 };
+    const other = { id: 4, name: 'Tobi', ready: false, host: false, you: false, isBot: false, pingMs: 40 };
+    const players = [...lobby(false).players.slice(0, 2), lobby(false).players[2]!, other, bot];
+    // Ade hosts, Kemi is you, Kestrel a bot that joined before Tobi
+    expect(phoneOrder([players[2]!, players[4]!, players[3]!, players[1]!, players[0]!]).map((p) => p.name)).toEqual(['Ade', 'Kemi', 'Tobi', '[BOT] Kestrel', '[BOT] Mantis']);
+  });
+
+  it('the rules and the one action share one footer (it sticks to the bottom at large text, so the rules stay on screen)', () => {
     const html = withCtl(ctl(), <PhoneLobby lobby={lobby(true)} />);
     const foot = html.slice(html.indexOf('class="pm-roster__foot"'));
-    expect(foot).toMatch(/^class="pm-roster__foot"><div class="pm-mission">[\s\S]*class="pm-rules[\s\S]*class="pm-bar"[\s\S]*Ready[\s\S]*Start/);
+    expect(foot).toMatch(/^class="pm-roster__foot"><div class="pm-mission"><button type="button" class="pm-rules[\s\S]*class="pm-bar pm-bar--go"[\s\S]*Start now/);
   });
 
   it('a spectator (v20): Join next round in Ready\'s place, Stay watching once in line, no warm-up', () => {

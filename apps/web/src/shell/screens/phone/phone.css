@@ -68,12 +68,51 @@ html.reduce-motion .mf-fit--phone { --m-rise: 0px; }
 .pm-roster ol { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .pm-row__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-row.is-you { box-shadow: inset 3px 0 0 var(--c-volt); }
+/* the host's row also carries Add friend and ⋯ for a guest: Host is its crown, so the name has the room */
+.pm-row .tag--host { font-size: 0; gap: 0; padding-inline: 6px; }
 .mf-fit--phone .pm-roster { padding: 8px 12px; gap: 5px; }
 .mf-fit--phone .pm-roster ol { gap: 2px; }
 .mf-fit--phone .pm-row { min-height: 32px; }
 .pm-roster__foot { display: contents; }
 .pm-rules { display: inline-flex; align-items: center; gap: 4px; min-height: var(--touch-min); margin: -10px 0; padding: 0 6px; border-radius: var(--r-xs); color: var(--c-text); font-size: var(--fs-14); font-weight: var(--fw-bold); cursor: pointer; }
 .pm-bar .is-ready { color: var(--c-ok); border-color: var(--c-ok); }
+/* UX-23 · two columns, about 40/60: the share card and the Lobby feed; the roster with its one action */
+.pm-lobby { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+.pm-lobby__side { position: relative; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.pm-lobby__side > * { flex: none; }
+.pm-lobby__side .pm-chip { top: 8px; right: 8px; }
+.pm-sharecard { display: flex; flex-direction: column; gap: 5px; padding: 6px 10px 8px; border: var(--bw-chunky) solid var(--c-ink-950); box-shadow: var(--sh-card-sm); -webkit-mask: none; mask: none; }
+.pm-sharecard__head { display: flex; flex-direction: column; }
+.pm-sharecard__head .label { font-size: var(--fs-14); }
+.pm-sharecard__code { font-size: calc(40px * var(--pm-head)); line-height: 0.95; letter-spacing: 0.1em; color: var(--c-paper-text); white-space: nowrap; }
+.pm-sharecard__qr { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pm-sharecard__qr .qr { width: 96px; height: 96px; padding: 4px; border: var(--bw) solid var(--c-ink-950); }
+.pm-sharecard__qr-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pm-sharecard__qr-t .label { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-14); }
+.pm-sharecard__qr-t .display { font-size: calc(28px * var(--pm-head)); letter-spacing: 0.08em; line-height: 1; }
+.pm-sharecard__link { font-size: var(--fs-14); font-weight: var(--fw-bold); color: var(--c-paper-muted); overflow-wrap: anywhere; }
+.pm-sharecard__acts { display: flex; gap: 6px; }
+.mf-fit--phone .pm-sharecard__share { flex: 1; min-width: 0; min-height: var(--touch-min); padding: 0 12px; gap: 8px; font-size: var(--fs-16); white-space: nowrap; }
+.mf-fit--phone .pm-sharecard__qrbtn { flex: none; width: var(--touch-min); min-height: var(--touch-min); border-color: var(--c-ink-950); }
+.pm-sharecard .rm-lchip { align-self: flex-start; }
+.pm-feed { display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--touch-min); padding: 3px 12px; color: var(--c-text); text-align: left; cursor: pointer; }
+.pm-feed > .ic { flex: none; color: var(--c-volt); }
+.pm-feed__t { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.pm-feed__t b { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: 0.06em; text-transform: uppercase; }
+.pm-feed__t b .lf-dot { position: static; }
+.pm-feed__line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-14); color: var(--c-muted); }
+/* the roster: its ready line may take a second line; the map and rules one row; the action across the column */
+.pm-roster__h { flex-wrap: wrap; row-gap: 0; }
+.pm-roster__h .status { min-width: 0; text-align: right; }
+.pm-mission .pm-rules { flex: 1; min-width: 0; margin: -6px 0; gap: 8px; padding: 0 4px; }
+.pm-rules b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-mission .pm-rules__limits { flex: none; color: var(--c-muted); white-space: nowrap; }
+.pm-rules > .ic:last-child { margin-left: auto; flex: none; }
+.mf-fit--phone .pm-bar--go .btn { min-height: 52px; font-size: var(--fs-18); }
+.pm-bar--go { align-items: center; }
+.pm-bar .pm-unready { flex: none; }
+.mf-fit--phone .pm-bar--go .pm-unready { min-height: var(--touch-min); font-size: var(--fs-14); }
+.pm-ready { flex: 1; justify-content: center; min-height: 40px; font-size: var(--fs-20); background: var(--c-ink-900); }
 /* the folded lobby: where the match clock goes (empty in warm-up), clear of the swap pill and the menu */
 .pm-strip { position: absolute; left: 0; right: 0; top: var(--safe-t); width: max-content; max-width: 240px; margin: 0 auto; display: flex; align-items: center; gap: 8px; padding: 2px 2px 2px 12px; pointer-events: auto; font-size: var(--fs-14); font-weight: var(--fw-bold); white-space: nowrap; }
 .pm-strip__ready { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -135,7 +174,7 @@ html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
 .is-text-lg .pm-poster .serial, .is-text-lg .pm-tk .label { display: none; }
 .is-text-lg .pm-nav__i span { font-size: var(--fs-14); }
 .is-text-lg .pm-nav { height: auto; min-height: 52px; }
-.is-text-lg .pm-lobby { grid-template-columns: 300px 1fr; }
+.is-text-lg .pm-rules__limits { display: none; }
 .is-text-lg .pm-qr { flex-direction: column; align-items: flex-start; }
 .is-text-lg .pm-row .tag { display: none; }
 .is-text-lg .pm-row .prow__ready { min-width: 0; }
@@ -150,9 +189,8 @@ html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
 /* the rules and Ready/Start stick to the screen's bottom together (the roster scrolls under them) */
 .is-text-lg .pm-roster__foot { position: sticky; bottom: 0; z-index: var(--z-local-2); display: flex; flex-direction: column; gap: 4px; margin: auto -12px -8px; padding: 4px 12px 8px; background: var(--c-ink-800); border-top: 2px solid var(--c-line); }
 .is-text-lg .pm-roster__foot .pm-mission { margin-top: 0; padding-top: 0; flex-wrap: nowrap; justify-content: space-between; }
-.is-text-lg .pm-roster__foot .pm-mission > span { min-width: 0; overflow: hidden; }
 .is-text-lg .pm-roster__foot .pm-mission b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.is-text-lg .pm-rules { flex: none; margin: 0; }
+.is-text-lg .pm-rules { margin: 0; }
 .is-text-lg .pm-pause { gap: 6px; padding: 10px 14px; }
 .is-text-lg .pm-pause .eyebrow { display: none; }
 .is-text-lg .pm-pause__t { font-size: calc(36px * var(--pm-head)); }

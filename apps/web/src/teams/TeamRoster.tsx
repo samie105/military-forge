@@ -7,7 +7,7 @@
 import { useState, type CSSProperties } from 'react';
 import { PlayerAvatar } from '../presentation/PlayerAvatar';
 import { playerName } from '../shell/matchView';
-import type { LobbyPlayer } from '../shell/onlineView';
+import { READY_WORDS, isReady, type LobbyPlayer } from '../shell/onlineView';
 import { Icon } from '../ui/Icon';
 import { blurAfter } from '../ui/Screen';
 import { TEAM_LETTERS, TEAM_NAMES, TEAM_SHAPES } from './palette';
@@ -42,7 +42,7 @@ export function TeamRoster({ players, teams, host, onMove, phone = false }: { pl
             <TeamMark team={t} />
             <b className="mf-team__name">Team {TEAM_NAMES[t]}</b>
             <span className="mf-team__n">
-              {group.length} · {group.filter((p) => p.ready || p.isBot).length} ready
+              {group.length} · {group.filter(isReady).length} ready
             </span>
             {host && picked !== null && pickedTeam !== t && (
               <button
@@ -75,7 +75,8 @@ export function TeamRoster({ players, teams, host, onMove, phone = false }: { pl
                 {p.host && <span className="tag tag--host">Host</span>}
                 {p.isBot && <span className="tag tag--bot">Bot</span>}
                 {p.you && <span className="tag tag--you">You</span>}
-                {!p.isBot && <span className={p.ready ? 'mf-team__ready is-ready' : 'mf-team__ready'}>{p.ready ? 'Ready' : 'Wait'}</span>}
+                {/* the lobby's words on every device (UX-21); the host is ready by being host */}
+                {!p.isBot && <span className={isReady(p) ? 'mf-team__ready is-ready' : 'mf-team__ready'}>{isReady(p) ? READY_WORDS.ready : READY_WORDS.notReady}</span>}
                 {/* report, block, mute, the host's remove (audit-2 L-01, L-02, L-11) */}
                 <PlayerMore target={roomTarget(p, 'lobby')} />
               </li>

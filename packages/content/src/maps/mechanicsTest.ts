@@ -52,6 +52,7 @@ const labels: MapLabel[] = zones.map((z) => {
 export const mechanicsTestMap: MapDef = {
   id: 'mechanics-test',
   name: 'Mechanics Range',
+  test: true,
   bounds: { minX: -2, minY: FLOOR_BOTTOM, maxX: WIDTH + 2, maxY: CEILING + 2 },
   solids: [
     rect(-2, FLOOR_BOTTOM, WIDTH + 2, 0, Material.Dirt), // floor

@@ -41,7 +41,8 @@ function files(src: string, srcSet: string): { path: string; width: number }[] {
 
 describe('the map posters', () => {
   it('every map a room can pick has a poster (a new map needs its shot and files before it ships)', () => {
-    const selectable = lobbyMaps('');
+    // what a player is offered (the grey-box test maps are ?armory=1's, UX-22), and the two with posters of their own
+    const selectable = [...lobbyMaps(''), 'movement-test', 'vertical-test'];
     expect(selectable.length).toBeGreaterThanOrEqual(7);
     for (const id of selectable) expect(POSTER_MAPS, `${id}: no poster; add a shot to art/posters/shots.json and ${REMAKE}`).toContain(id);
     // and nothing names a map that isn't in the game

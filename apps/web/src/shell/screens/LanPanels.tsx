@@ -263,7 +263,7 @@ export function CopyCode({ text, className = 'btn btn--ink m-p8' }: { text: stri
     >
       <Icon name={done ? 'check' : 'copy'} />
       {done ? (
-        'Copied ✓'
+        'Copied'
       ) : (
         <span>
           Copy<span className="mf-copy__more"> as text</span>

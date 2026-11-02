@@ -98,6 +98,7 @@ labels.push(
 export const movementTestMap: MapDef = {
   id: 'movement-test',
   name: 'Proving Ground',
+  test: true,
   bounds: { minX: -2, minY: FLOOR_BOTTOM, maxX: WIDTH + 2, maxY: CEILING + 2 },
   solids: [
     { points: terrain, material: Material.Dirt },

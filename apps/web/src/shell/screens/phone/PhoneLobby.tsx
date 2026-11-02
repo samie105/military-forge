@@ -1,32 +1,35 @@
 /**
- * M3 · Phone lobby (the kit's data-screen="m-lobby"): the room code; the loudest thing on screen, the
- * share poster (Share room link through the phone's own share sheet, and the link's QR for a friend
- * next to you); the roster with who's ready (bots too); the map; Ready and, for the host, Start. The
- * match rules open in a bottom sheet (the host edits, guests read). "Warm up" folds the lobby to a
- * strip so the player can move and shoot behind it. Same actions as the desktop Lobby; a spectator
- * (v20) gets Join next round (or Stay watching) in Ready's place, and no warm-up.
+ * M3 · Phone lobby (the kit's data-screen="m-lobby"), two columns about 40/60 (UX-23). Left: a compact
+ * share card (the room code as its headline, Share link through the phone's own share sheet, the QR
+ * behind Show QR, Invite friends, the room's listing), and under it the Lobby feed's latest line. Right:
+ * the roster with who's ready, the map and rules line (it opens a bottom sheet: the host edits, guests
+ * read), and the one action pinned to the bottom across the column: Start now for the host, Ready for a
+ * guest (UX-21). A local room keeps its own share poster (its QR is the way in). "Warm up" folds the
+ * lobby to a strip so the player can move and shoot behind it. Same actions and words as the desktop
+ * Lobby; a spectator (v20) gets Join next round (or Stay watching) in Ready's place, and no warm-up.
  *
- * Motion: the room code focus-pulls in (P1), the share poster arrives first and the roster's rows
- * after it (P3); a player joining rises in, the counts roll (P4), a ready tick stamps (P7); Share is
- * P8, then the share sheet, then a "Shared" stamp.
+ * Motion: the room code focus-pulls in (P1), the cards are there on the first frame and the roster's
+ * rows rise in turn (P3; UX-98); a player joining rises in, the counts roll (P4), a ready tick stamps
+ * (P7); Share is P8, then the share sheet, then a "Shared" stamp.
  */
 import { maps } from '@military-forge/content';
+import type { LobbyEntry } from '@military-forge/shared';
 import { ROOM_SETTING_LIMITS } from '@military-forge/protocol';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../../../ui/Icon';
 import { blurAfter } from '../../../ui/Screen';
 import { useCtl } from '../../context';
 import { roomLink } from '../../controller';
 import type { Bindings } from '../../controls';
 import { playerName } from '../../matchView';
-import type { LobbyPlayer, LobbyView } from '../../onlineView';
+import { READY_WORDS, isReady, readyCount, readyLine, type LobbyPlayer, type LobbyView } from '../../onlineView';
 import { encodeQr, qrSvgPath } from '../../qr';
 import { MapPoster } from '../../posters';
 import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, lobbyMaps, minutesLabel, useLeaveConfirm, useRoomSetting, useSpectating } from '../Lobby';
 import { leaveCost } from '../Pause';
 import { PhoneScreen, rise } from './layout';
 import { LobbyInvite } from '../../../social/SocialLayer';
-import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
+import { Roll, ShareChip, Sheet, shareRoom, useShareChip, type ShareOutcome } from './parts';
 import { PhoneTips } from './PhoneTips';
 import { PlayerAvatar } from '../../../presentation/PlayerAvatar';
 import { AddFriendButton, RowActions } from '../../../social/AddFriend';
@@ -35,9 +38,12 @@ import { BOT_LEVELS, BOT_LEVEL_NAMES, botFillChoices, botsLine, type BotLevel } 
 import { LobbyRadio } from '../../../voice/Radio';
 import { PlayerMore, roomTarget } from '../../../social/ReportSheet';
 import { RoomListing } from '../../../rooms/RoomListing';
+import { useFeed } from '../../../feed/LobbyFeed';
+import { useFeedSel, type FeedController } from '../../../feed/feed';
 
 function Row({ p, i, friendly = false }: { p: LobbyPlayer; i: number; friendly?: boolean }) {
-  const ready = p.ready || p.isBot;
+  // a bot is always ready; the host starts the match, so is too (UX-21)
+  const ready = isReady(p);
   return (
     <li className={`pm-row m-p3${p.you ? ' is-you' : ''}`} style={rise(i)}>
       {/* the player's soldier as their avatar (presentation/, owner 23 Oct) */}
@@ -60,7 +66,7 @@ function Row({ p, i, friendly = false }: { p: LobbyPlayer; i: number; friendly?:
       {/* keyed by the state, so a player readying up stamps in (P7) */}
       <span key={ready ? 'ready' : 'wait'} className={`prow__ready${ready ? ' is-ready m-p7' : ''}`}>
         <Icon name={ready ? 'check' : 'clock'} size="sm" />
-        {ready ? 'Ready' : 'Wait'}
+        {ready ? READY_WORDS.ready : READY_WORDS.notReady}
       </span>
       {/* report, block, mute, the host's remove (audit-2 L-01, L-02, L-11) */}
       <PlayerMore target={roomTarget(p, 'lobby')} />
@@ -127,20 +133,26 @@ function PhoneLocalShare({ lobby, qr }: { lobby: LobbyView; qr: { viewBox: strin
   );
 }
 
-/** The lobby folded away for warm-up: the code, who's ready, Ready, and the way back (top centre, clear of the dials). */
+/** The lobby folded away for warm-up: the code, who's ready, the one action, and the way back (top centre, clear of the dials). */
 function PhoneLobbyStrip({ lobby, onOpen }: { lobby: LobbyView; onOpen: () => void }) {
   const ctl = useCtl();
-  const people = lobby.players.filter((p) => !p.isBot);
-  const ready = people.filter((p) => p.ready).length;
+  const { ready, people } = readyCount(lobby.players);
+  const enough = lobby.players.length >= lobby.minPlayers;
   return (
     <PhoneScreen name="m-lobby" kind="game" label="Room lobby (folded)" states={['folded', lobby.ready ? 'ready' : 'not-ready']}>
       <div className="pm-strip plate m-p9" role="region" aria-label={`Room ${lobby.code}, warming up`}>
         <span className="pm-strip__ready">
-          <Roll value={ready} />/<Roll value={people.length} /> ready
+          <Roll value={ready} />/<Roll value={people} /> ready
         </span>
-        <button type="button" className={`btn btn--sm btn--icon m-p8 ${lobby.ready ? 'btn--ghost' : 'btn--volt'}`} aria-pressed={lobby.ready} aria-label={lobby.ready ? 'Ready (tap to wait)' : 'Ready up'} onClick={blurAfter(() => ctl.host.online?.setReady(!lobby.ready))}>
-          <Icon name={lobby.ready ? 'check' : 'clock'} />
-        </button>
+        {lobby.isHost ? (
+          <button type="button" className="btn btn--sm btn--icon btn--volt m-p8" aria-label={READY_WORDS.start} disabled={!enough} onClick={blurAfter(() => ctl.host.online?.startMatch())}>
+            <Icon name="play" />
+          </button>
+        ) : (
+          <button type="button" className={`btn btn--sm btn--icon m-p8 ${lobby.ready ? 'btn--ghost' : 'btn--volt'}`} aria-label={lobby.ready ? `${READY_WORDS.youReady}: tap for ${READY_WORDS.notReady.toLowerCase()}` : READY_WORDS.ready} onClick={blurAfter(() => ctl.host.online?.setReady(!lobby.ready))}>
+            <Icon name={lobby.ready ? 'check' : 'clock'} />
+          </button>
+        )}
         <LobbyRadio players={lobby.players} phone />
         <button type="button" className="btn btn--ghost btn--sm btn--icon m-p8" aria-label="Open the lobby" onClick={blurAfter(onOpen)}>
           <Icon name="users-plus" />
@@ -267,6 +279,140 @@ function RulesSheet({ lobby, open, onClose }: { lobby: LobbyView; open: boolean;
   );
 }
 
+
+/**
+ * The share card (UX-23): the room code as its headline, Share link (volt) through the phone's share
+ * sheet, the QR behind Show QR (for a friend next to you), then Invite friends and the room's listing.
+ */
+function PhoneShareCard({ lobby, qr, onShared }: { lobby: LobbyView; qr: { viewBox: string; path: string }; onShared: (outcome: ShareOutcome) => void }) {
+  const [showQr, setShowQr] = useState(false);
+  const shownLink = roomLink(lobby.code).replace(/^https?:\/\//, '');
+  return (
+    <section className="ticket pm-sharecard" aria-label="Invite friends">
+      {showQr ? (
+        <div className="pm-sharecard__qr" id="pm-room-qr">
+          <span className="qr" role="img" aria-label="QR code for the room link">
+            <svg viewBox={qr.viewBox} shapeRendering="crispEdges" aria-hidden="true">
+              <path fill="var(--c-qr-dark)" d={qr.path} />
+            </svg>
+          </span>
+          <span className="pm-sharecard__qr-t">
+            <span className="label">
+              <Icon name="globe" size="sm" />
+              Scan to join
+            </span>
+            <b className="display num">{lobby.code}</b>
+            <span className="pm-sharecard__link" data-bind="lobby.links.internet">
+              {shownLink}
+            </span>
+          </span>
+        </div>
+      ) : (
+        <div className="pm-sharecard__head">
+          <span className="label">Room code</span>
+          <b className="display pm-sharecard__code num" aria-label={`Room code ${[...lobby.code].join(' ')}`}>
+            {lobby.code}
+          </b>
+        </div>
+      )}
+      <div className="pm-sharecard__acts">
+        <button type="button" className="btn btn--volt pm-sharecard__share m-p8" onClick={blurAfter(() => void shareRoom(lobby.code).then(onShared))}>
+          <Icon name="share" />
+          Share link
+        </button>
+        {/* the QR waits behind its toggle: the code and the link are what most friends need */}
+        <button type="button" className="btn btn--paper btn--icon pm-sharecard__qrbtn m-p8" aria-pressed={showQr} aria-controls="pm-room-qr" aria-label={showQr ? 'Hide QR' : 'Show QR'} title={showQr ? 'Hide QR' : 'Show QR'} onClick={blurAfter(() => setShowQr(!showQr))}>
+          <Icon name={showQr ? 'close' : 'qr'} />
+        </button>
+      </div>
+      {/* friends (social/): invite them straight to this room */}
+      <LobbyInvite phone />
+      {/* who finds the room in Rooms, Post to Lobby, WhatsApp (rooms/): a chip that opens a sheet */}
+      <RoomListing code={lobby.code} phone />
+    </section>
+  );
+}
+
+/** One line of the Lobby feed, short, for the lobby's peek. */
+export function peekLine(e: LobbyEntry): string {
+  switch (e.kind) {
+    case 'chat':
+      return `${e.from.name}: ${e.text}`;
+    case 'room_posted':
+      return `${e.hostName} opened a room`;
+    case 'match_result':
+      return e.winnerName ? `${e.winnerName} won on ${maps[e.map]?.name ?? e.map}` : `A bot took ${maps[e.map]?.name ?? e.map}`;
+    case 'welcome':
+      return `${e.name} joined · say welcome`;
+    case 'level_up':
+      return `${e.name} reached level ${e.level}`;
+  }
+}
+
+/**
+ * The Lobby feed under the share card (UX-23: the left column's space, not a third column): its latest
+ * line and the dot for something new; a tap opens the feed's own sheet with Quick chat.
+ */
+function FeedPeek() {
+  const feed = useFeed();
+  return feed ? <FeedPeekBody feed={feed} /> : null;
+}
+
+function FeedPeekBody({ feed }: { feed: FeedController }) {
+  useEffect(() => {
+    if (feed.store.getState().status === 'idle') void feed.load();
+  }, [feed]);
+  const last = useFeedSel(feed, (s) => s.entries.filter((e) => e.kind !== 'chat' || (!s.hideChat && !s.muted[e.from.id])).at(-1) ?? null);
+  const status = useFeedSel(feed, (s) => s.status);
+  const unread = useFeedSel(feed, (s) => s.unread && !s.hideChat);
+  const line = last ? peekLine(last) : status === 'ready' ? 'Nothing yet today · say hi with Quick chat' : 'Everyone playing right now';
+  return (
+    <button type="button" className="card card--print pm-feed m-p8" aria-label={`Lobby: public chat. ${line}`} onClick={() => feed.open()}>
+      <Icon name="chat" />
+      <span className="pm-feed__t">
+        <b>
+          Lobby
+          {unread && <span className="lf-dot" aria-hidden="true"></span>}
+        </b>
+        <span className="pm-feed__line">{line}</span>
+      </span>
+      <Icon name="chev-right" size="sm" />
+    </button>
+  );
+}
+
+/**
+ * The phone roster's order: the host, you, the other people, then the bots. The list shows about three
+ * rows above the action, and a guest's own row (where Not ready shows) fell below them.
+ */
+export function phoneOrder(players: readonly LobbyPlayer[]): LobbyPlayer[] {
+  const rank = (p: LobbyPlayer) => (p.host ? 0 : p.you ? 1 : p.isBot ? 3 : 2);
+  return [...players].sort((a, b) => rank(a) - rank(b));
+}
+
+/** A guest's one action (UX-21): Ready, which becomes a "You're ready" stamp with Not ready beside it. */
+function PhoneGuestReady({ ready, padFirst }: { ready: boolean; padFirst: boolean }) {
+  const online = useCtl().host.online;
+  if (ready)
+    return (
+      <>
+        <span className="stamp stamp--ok pm-ready m-p7" role="status">
+          <Icon name="check" />
+          {READY_WORDS.youReady}
+        </span>
+        <button type="button" className="btn btn--ghost btn--sm pm-unready m-p8" data-pad-first={padFirst || undefined} onClick={blurAfter(() => online?.setReady(false))}>
+          {READY_WORDS.notReady}
+        </button>
+      </>
+    );
+  return (
+    <button type="button" className="btn btn--volt m-p8" data-pad-first={padFirst || undefined} onClick={blurAfter(() => online?.setReady(true))}>
+      <Icon name="check" />
+      {READY_WORDS.ready}
+    </button>
+  );
+}
+
 /**
  * `tips`: set while the first-run controls card is due (it shows once the lobby folds): the touch tips,
  * not the desktop's keys. The props match the desktop Lobby's; the bindings and `doubleTapDash` are the keyboard's.
@@ -290,10 +436,9 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
     );
 
   const host = lobby.isHost;
-  const people = lobby.players.filter((p) => !p.isBot);
-  const readyCount = people.filter((p) => p.ready).length;
+  const count = readyCount(lobby.players);
   const enough = lobby.players.length >= lobby.minPlayers;
-  const shownLink = link.replace(/^https?:\/\//, '');
+  const allReady = enough && count.ready === count.people;
   const me = lobby.players.find((p) => p.you);
 
   return (
@@ -329,58 +474,40 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
         </header>
 
         <div className="pm-lobby">
-          <section className={`poster halftone-ink pm-share m-p3${lobby.local ? ' pm-share--local' : ''}${lobby.local && lobby.code ? ' pm-share--scan' : ''}`} style={rise(0)} aria-label="Invite friends">
-            <b className="display pm-share__t">Rally your squad</b>
-            {lobby.code !== '' && (
-              <button
-                type="button"
-                className="btn btn--ink btn--block pm-share__btn m-p8"
-                onClick={blurAfter(() => {
-                  void shareRoom(lobby.code).then(showChip);
-                })}
-              >
-                <Icon name="share" />
-                <span>
-                  Share<span className="pm-more"> room</span> link
-                </span>
-              </button>
-            )}
+          <div className="pm-lobby__side">
             {lobby.local ? (
-              <PhoneLocalShare lobby={lobby} qr={qr} />
-            ) : (
-              <div className="pm-qrs">
-                <div className="ticket pm-qr pm-qr--wide">
-                  <span className="qr" role="img" aria-label="QR code for the room link">
-                    <svg viewBox={qr.viewBox} shapeRendering="crispEdges" aria-hidden="true">
-                      <path fill="var(--c-qr-dark)" d={qr.path} />
-                    </svg>
-                  </span>
-                  <span>
-                    <span className="label">
-                      <Icon name="globe" size="sm" />
-                      Scan to join
+              // a local room: its QR is the way in (the link finds the room through the relay), so it shows at once
+              <section className={`poster halftone-ink pm-share pm-share--local${lobby.code ? ' pm-share--scan' : ''}`} aria-label="Invite friends">
+                <b className="display pm-share__t">Rally your squad</b>
+                {lobby.code !== '' && (
+                  <button type="button" className="btn btn--ink btn--block pm-share__btn m-p8" onClick={blurAfter(() => void shareRoom(lobby.code).then(showChip))}>
+                    <Icon name="share" />
+                    <span>
+                      Share<span className="pm-more"> room</span> link
                     </span>
-                    <b data-bind="lobby.links.internet">{shownLink}</b>
-                  </span>
-                </div>
-              </div>
+                  </button>
+                )}
+                <PhoneLocalShare lobby={lobby} qr={qr} />
+                <span className="hazard" aria-hidden="true"></span>
+              </section>
+            ) : (
+              <PhoneShareCard lobby={lobby} qr={qr} onShared={showChip} />
             )}
-            {/* friends (social/): invite them straight to this room */}
-            {!lobby.local && <LobbyInvite phone />}
-            {/* who finds the room in Rooms, Post to Lobby, WhatsApp (rooms/): a chip that opens a sheet */}
-            {!lobby.local && lobby.code !== '' && <RoomListing code={lobby.code} phone />}
             <ShareChip outcome={chip} />
-            <span className="hazard" aria-hidden="true"></span>
-          </section>
+            {!lobby.local && <FeedPeek />}
+          </div>
 
-          <section className="card card--print pm-roster m-p3" style={rise(1)} aria-labelledby="pm-roster-t">
+          <section className="card card--print pm-roster" aria-labelledby="pm-roster-t">
             <div className="pm-roster__h">
               <b className="display" id="pm-roster-t">
                 Roster <Roll value={lobby.players.length} />/{ROOM_SLOTS}
               </b>
-              <span className={`status ${readyCount === people.length ? 'status--ok' : 'status--busy'}`}>
-                <Icon name={readyCount === people.length ? 'ok' : 'clock'} size="sm" />
-                <Roll value={readyCount} /> ready
+              <span className={`status ${allReady ? 'status--ok' : 'status--busy'}`} data-bind="room.readyCount">
+                <Icon name={allReady ? 'ok' : 'clock'} size="sm" />
+                <span>
+                  <Roll value={count.ready} />
+                  {readyLine(lobby.players).slice(String(count.ready).length)}
+                </span>
               </span>
             </div>
             {/* team modes (teams/, v21): grouped by team; the host taps a player, then Move here */}
@@ -388,21 +515,20 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
               <TeamRoster players={lobby.players} teams={lobby.teams ?? 0} host={lobby.isHost} onMove={(id, t) => online?.setTeam(id, t)} phone />
             ) : (
             <ol>
-              {lobby.players.map((p, i) => (
-                <Row key={p.id} p={p} i={i + 2} friendly={!lobby.local} />
+              {phoneOrder(lobby.players).map((p, i) => (
+                <Row key={p.id} p={p} i={i + 1} friendly={!lobby.local} />
               ))}
             </ol>
             )}
-            {/* the match rules and Ready/Start: one footer, so at large text both stay in view (phone.css) */}
+            {/* the map and rules line, then the one action across the column: one footer, pinned to the bottom (thumb zone) */}
             <div className="pm-roster__foot">
               <div className="pm-mission">
-                <span>
+                <button type="button" className="pm-rules m-p8" aria-haspopup="dialog" onClick={() => setRules(true)}>
                   <MapPoster id={lobby.mapId} kind="card" sizes="56px" className="pm-mission__art" />
                   <b data-bind="lobby.map.name">{lobby.mapName}</b>
-                </span>
-                <button type="button" className="pm-rules m-p8" onClick={() => setRules(true)}>
-                  <Icon name="clock" size="sm" />
-                  {minutesLabel(lobby.timeLimit)} · {killsLabel(lobby.killLimit)}
+                  <span className="pm-rules__limits">
+                    {minutesLabel(lobby.timeLimit)} · {killsLabel(lobby.killLimit)}
+                  </span>
                   <Icon name={host ? 'edit' : 'chev-right'} size="sm" />
                 </button>
               </div>
@@ -426,16 +552,14 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
                   )}
                 </div>
               ) : (
-                <div className="pm-bar">
-                  <button type="button" className={`btn btn--sm m-p8 ${lobby.ready ? 'btn--ghost is-ready' : 'btn--ghost'}`} aria-pressed={lobby.ready} data-pad-first={!host || !enough || undefined} onClick={blurAfter(() => online?.setReady(!lobby.ready))}>
-                    <Icon name={lobby.ready ? 'check' : 'clock'} />
-                    Ready
-                  </button>
-                  {host && (
-                    <button type="button" className="btn btn--paper btn--sm m-p8" data-pad-first disabled={!enough} title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`} onClick={blurAfter(() => online?.startMatch())}>
+                <div className="pm-bar pm-bar--go">
+                  {host ? (
+                    <button type="button" className={`btn btn--volt m-p8${allReady ? ' mf-glow' : ''}`} data-pad-first disabled={!enough} title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`} onClick={blurAfter(() => online?.startMatch())}>
                       <Icon name="play" />
-                      Start
+                      {READY_WORDS.start}
                     </button>
+                  ) : (
+                    <PhoneGuestReady ready={lobby.ready} padFirst />
                   )}
                 </div>
               )}

@@ -145,6 +145,7 @@ const labels: MapLabel[] = [
 export const verticalTestMap: MapDef = {
   id: 'vertical-test',
   name: 'Vertical Range',
+  test: true,
   bounds: { minX: -2, minY: FLOOR_BOTTOM, maxX: WIDTH + 2, maxY: CEILING + 2 },
   solids,
   oneWays,

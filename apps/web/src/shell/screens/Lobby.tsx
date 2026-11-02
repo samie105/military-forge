@@ -2,10 +2,14 @@
  * 4 · Room lobby (round two's data-screen="lobby"): sharing first and loudest (Share, the room link
  * with its QR, Copy link and WhatsApp), the roster and the mission (the host edits, guests read).
  * The lobby is the room's warm-up: "Warm up" folds it into a strip so the player can move and shoot
- * behind it. Motion (ui-motion-spec.md §4.1): the room code focus-pulls in, the share card arrives
- * first and the rows rise in turn (P3); joins rise in and leaves fall out, the counts roll (P4), a
- * ready tick stamps (P7), Copy link swaps its label for 1.6 s, and the host's Start button glows when
- * everyone is ready.
+ * behind it. Motion (ui-motion-spec.md §4.1): the room code focus-pulls in, the cards are there on the
+ * first frame and the roster's rows rise in turn (P3; UX-98: no empty frame); joins rise in and leaves
+ * fall out, the counts roll (P4), a ready tick stamps (P7), Copy link swaps its label for 1.6 s, and
+ * the host's Start now glows when everyone is ready.
+ *
+ * Ready (UX-21): the host has one action, Start now, and no Ready (they're ready by being host); a
+ * guest has one, Ready, which becomes a "You're ready" stamp. The count is the people's, and says the
+ * bots are always ready. The map is one row with its poster; the host's opens a sheet of posters (UX-22).
  *
  * A spectator (v20: in the room with no slot) gets no Ready, Start or warm-up: the footer says it's
  * watching, with Join next round (and Stay watching once in line for a slot).
@@ -26,7 +30,7 @@ import { eventLook } from '../../hud/model';
 import { useCtl } from '../context';
 import { roomLink } from '../controller';
 import { playerName } from '../matchView';
-import type { LobbyPlayer, LobbyView } from '../onlineView';
+import { READY_WORDS, isReady, readyCount, readyLine, type LobbyPlayer, type LobbyView } from '../onlineView';
 import { encodeQr, qrSvgPath } from '../qr';
 import type { Bindings } from '../controls';
 import { Backdrop, RollNum, remember } from './frame';
@@ -78,9 +82,17 @@ export function mapEvents(id: string): { name: string; kind: MapEventKind }[] {
   return defs.slice(0, 2).map((d) => ({ name: d.name ? d.name.charAt(0) + d.name.slice(1).toLowerCase() : EVENT_WORDS[d.kind], kind: d.kind }));
 }
 
-/** The maps a lobby lists (the dev test map stays out unless the room is on it). */
-export function lobbyMaps(current: string): string[] {
-  return Object.keys(maps).filter((id) => id !== 'mechanics-test' || id === current);
+/** The page asks for the test armory (?armory=1): the grey-box test maps are offered too. */
+function armoryAsked(): boolean {
+  return typeof location !== 'undefined' && new URLSearchParams(location.search ?? '').get('armory') === '1';
+}
+
+/**
+ * The maps a lobby lists: the grey-box test maps (content's `test`, Proving Ground among them) stay out
+ * unless the room is on one or the page asked for the test armory (UX-22).
+ */
+export function lobbyMaps(current: string, armory = armoryAsked()): string[] {
+  return Object.keys(maps).filter((id) => !maps[id]?.test || id === current || armory);
 }
 
 export function minutesLabel(seconds: number): string {
@@ -142,7 +154,8 @@ function PlayerRow({ p, hostView, leaving, i, friendly = false }: { p: LobbyPlay
   const you = p.you ? (hostView ? ' is-you' : ' is-you-guest') : '';
   const ping = pingLook(p.pingMs);
   return (
-    <li className={`prow${you} ${leaving ? 'm-leave' : 'm-p3 m-p3--tight'}`} style={{ '--i': i } as CSSProperties}>
+    // the rows rise in turn after the cards, which are drawn at once (UX-98: no empty frame on arrival)
+    <li className={`prow${you} ${leaving ? 'm-leave' : 'm-p3'}`} style={{ '--i': i + 1 } as CSSProperties}>
       {/* the player's soldier as their avatar (presentation/, owner 23 Oct) */}
       <PlayerAvatar id={p.id} name={p.name} bot={p.isBot} />
       <b className="prow__name">{playerName(p.name, p.isBot)}</b>
@@ -181,15 +194,16 @@ function PlayerRow({ p, hostView, leaving, i, friendly = false }: { p: LobbyPlay
       ) : (
         <span className="prow__ping">–</span>
       )}
-      {p.ready || p.isBot ? (
+      {/* the host starts the match: ready by being host, as a bot is by being a bot (UX-21) */}
+      {isReady(p) ? (
         <span className="prow__ready is-ready m-p7" key="ready">
           <Icon name="check" size="sm" />
-          Ready
+          {READY_WORDS.ready}
         </span>
       ) : (
         <span className="prow__ready" key="not-ready">
           <Icon name="clock" size="sm" />
-          Not ready
+          {READY_WORDS.notReady}
         </span>
       )}
     </li>
@@ -208,6 +222,7 @@ function MapCard({ id, picked, disabled, lazy, onSelect }: { id: string; picked:
       disabled={disabled}
       onClick={blurAfter(onSelect)}
       data-map={id}
+      data-pad-first={picked || undefined}
     >
       <div className="thumb">
         {/* the map's poster: a frame from the game (the card's text names the map) */}
@@ -236,11 +251,152 @@ function MapCard({ id, picked, disabled, lazy, onSelect }: { id: string; picked:
   );
 }
 
-/** The lobby folded away for warm-up: the code, who's ready, Ready, and the way back. */
+/**
+ * The room's map in the mission card (UX-22: the grid of cards was cut at the panel's edge): its poster,
+ * name, place and events in one row. The host's row opens the map sheet; a guest's only reads.
+ */
+function MapRow({ id, host, onOpen }: { id: string; host: boolean; onOpen: (e: { currentTarget: HTMLElement }) => void }) {
+  const card = MAP_CARDS[id];
+  const name = maps[id]?.name ?? id;
+  const body = (
+    <>
+      <span className="thumb">
+        <MapPoster id={id} kind="card" sizes="240px" />
+      </span>
+      <span className="mapcard__body">
+        <b className="display mapcard__name" data-bind="room.mapName">
+          {name}
+        </b>
+        {card?.place && (
+          <span className="mapcard__place">
+            <Icon name="map" size="sm" />
+            {card.place}
+          </span>
+        )}
+        {card?.tagline && <span className="mapcard__tag">{card.tagline}</span>}
+        <span className="mapcard__events">
+          {mapEvents(id).map((e) => (
+            <span key={e.name} className={`chip ${eventChip(e.kind)}`}>
+              <Icon name={eventLook(e.kind).icon} />
+              {e.name}
+            </span>
+          ))}
+        </span>
+      </span>
+      {host && (
+        <span className="lobby__map-change">
+          Change
+          <Icon name="chev-right" size="sm" />
+        </span>
+      )}
+    </>
+  );
+  return host ? (
+    <button type="button" className="mapcard mapcard--row is-picked m-p8" aria-haspopup="dialog" aria-label={`Map: ${name}. Change the map`} data-map={id} onClick={onOpen}>
+      {body}
+    </button>
+  ) : (
+    <div className="mapcard mapcard--row is-picked" data-map={id}>
+      {body}
+    </div>
+  );
+}
+
+/** The host's map choice over the lobby: every room map's poster card, the room's own picked (UX-22). */
+export function MapSheet({ current, onPick, onClose }: { current: string; onPick: (id: string) => void; onClose: () => void }) {
+  return (
+    <Screen name="map-pick" kind="game" modal dialog label="Pick the map">
+      <div className="mf-mapsheet card card--print m-p1" aria-labelledby="map-pick-t">
+        <div className="lobby__head">
+          <h2 id="map-pick-t" className="display">
+            Pick the map
+          </h2>
+          <button className="btn btn--ghost btn--sm m-p8" type="button" data-pad-back onClick={blurAfter(onClose)}>
+            <Icon name="close" />
+            Close
+          </button>
+        </div>
+        <div className="maps mf-mapsheet__maps" role="radiogroup" aria-label="Map">
+          {lobbyMaps(current).map((id, i) => (
+            <MapCard key={id} id={id} picked={id === current} disabled={false} lazy={i >= 6} onSelect={() => onPick(id)} />
+          ))}
+        </div>
+      </div>
+    </Screen>
+  );
+}
+
+/**
+ * A guest's one action (UX-21): Ready, which turns into a "You're ready" stamp, with Not ready beside
+ * it to take it back. `xl` is the footer's (a controller lands on it), else the folded strip's.
+ */
+function GuestReady({ ready, xl = false }: { ready: boolean; xl?: boolean }) {
+  const online = useCtl().host.online;
+  if (ready)
+    return (
+      <span className="lobby__ready">
+        <span className={xl ? 'stamp stamp--ok stamp--lg m-p7' : 'stamp stamp--ok m-p7'} role="status">
+          <Icon name="check" />
+          {READY_WORDS.youReady}
+        </span>
+        <button className="btn btn--ghost btn--sm m-p8" type="button" data-pad-first={xl || undefined} onClick={blurAfter(() => online?.setReady(false))}>
+          {READY_WORDS.notReady}
+        </button>
+      </span>
+    );
+  return (
+    <button
+      className={xl ? 'btn btn--volt btn--xl m-p8' : 'btn btn--volt m-p8'}
+      type="button"
+      // a controller lands on the match, never on Leave (audit 2, N-04)
+      data-pad-first={xl || undefined}
+      onClick={(e) => {
+        remember('start', e.currentTarget);
+        blurAfter(() => online?.setReady(true))(e);
+      }}
+    >
+      <Icon name="check" />
+      {READY_WORDS.ready}
+    </button>
+  );
+}
+
+/** The host's one action (UX-21): Start now, which glows once every player is ready. */
+function HostStart({ lobby, xl = false }: { lobby: LobbyView; xl?: boolean }) {
+  const online = useCtl().host.online;
+  const { ready, people } = readyCount(lobby.players);
+  const enough = lobby.players.length >= lobby.minPlayers;
+  const cls = ['btn btn--volt m-p8', xl ? 'btn--xl' : '', enough && ready === people ? 'mf-glow' : ''].filter(Boolean).join(' ');
+  return (
+    <button
+      className={cls}
+      type="button"
+      data-pad-first={xl || undefined}
+      disabled={!enough}
+      title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`}
+      onClick={(e) => {
+        remember('start', e.currentTarget);
+        blurAfter(() => online?.startMatch())(e);
+      }}
+    >
+      <Icon name="play" />
+      {xl ? (
+        <span className="btn__stack">
+          {READY_WORDS.start}
+          <span className="btn__sub" data-bind="room.startReady">
+            {readyLine(lobby.players, false)}
+          </span>
+        </span>
+      ) : (
+        READY_WORDS.start
+      )}
+    </button>
+  );
+}
+
+/** The lobby folded away for warm-up: the code, who's ready, the one action (Start now or Ready), and the way back. */
 function LobbyStrip({ lobby, onOpen }: { lobby: LobbyView; onOpen: () => void }) {
-  const ctl = useCtl();
-  const people = lobby.players.filter((p) => !p.isBot);
-  const ready = people.filter((p) => p.ready).length;
+  const { ready, people } = readyCount(lobby.players);
   return (
     <Screen name="lobby" kind="game" states={[lobby.isHost ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready']} label="Room lobby (folded)">
       <div className="mf-lobby-strip plate m-p9" role="region" aria-label="Room">
@@ -253,19 +409,9 @@ function LobbyStrip({ lobby, onOpen }: { lobby: LobbyView; onOpen: () => void })
         </span>
         <span className="status status--ok">
           <Icon name="ok" />
-          <RollNum value={ready} /> of <RollNum value={people.length} /> ready
+          <RollNum value={ready} /> of <RollNum value={people} /> ready
         </span>
-        {lobby.ready ? (
-          <button className="btn btn--paper m-p8" type="button" aria-pressed="true" onClick={blurAfter(() => ctl.host.online?.setReady(false))}>
-            <Icon name="check" />
-            You're ready
-          </button>
-        ) : (
-          <button className="btn btn--volt m-p8" type="button" onClick={blurAfter(() => ctl.host.online?.setReady(true))}>
-            <Icon name="clock" />
-            Ready
-          </button>
-        )}
+        {lobby.isHost ? <HostStart lobby={lobby} /> : <GuestReady ready={lobby.ready} />}
         <LobbyRadio players={lobby.players} />
         <button className="btn btn--ghost m-p8" type="button" onClick={blurAfter(onOpen)}>
           <Icon name="users-plus" />
@@ -317,6 +463,11 @@ export function LocalRoomNote({ lobby }: { lobby: LobbyView }) {
  * while it shows; Escape (and a controller's B, on Stay) is Stay, not the in-match menu.
  */
 export function useLeaveConfirm(): { asking: boolean; ask: (e: { currentTarget: HTMLElement }) => void; stay: () => void } {
+  return useAsk();
+}
+
+/** A question or sheet over the lobby: `ask` opens it from a button, `stay` (and Escape) closes it and puts focus back. */
+export function useAsk(): { asking: boolean; ask: (e: { currentTarget: HTMLElement }) => void; stay: () => void } {
   const [asking, setAsking] = useState(false);
   // Stay puts the keyboard back on Leave, where it was
   const opener = useRef<HTMLElement | null>(null);
@@ -378,6 +529,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
   const [folded, setFolded] = useState(false);
   const [copied, setCopied] = useState(false);
   const leaving = useLeaveConfirm();
+  const picking = useAsk();
   const [timeLimit, showTime] = useRoomSetting(lobby.timeLimit);
   const [kills, showKills] = useRoomSetting(lobby.killLimit);
   const [bots, showBots] = useRoomSetting(lobby.bots);
@@ -399,11 +551,10 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
   const host = lobby.isHost;
   const me = lobby.players.find((p) => p.you);
   const hostName = lobby.players.find((p) => p.host)?.name ?? 'The host';
-  // bots never ready up (the match doesn't wait for them): "ready" counts the people
-  const people = lobby.players.filter((p) => !p.isBot);
-  const readyCount = people.filter((p) => p.ready).length;
+  // bots are always ready (the match doesn't wait for them): "ready" counts the people, the host in
+  const count = readyCount(lobby.players);
   const enough = lobby.players.length >= lobby.minPlayers;
-  const allReady = enough && readyCount === people.length;
+  const allReady = enough && count.ready === count.people;
   const open = Math.max(0, ROOM_SLOTS - lobby.players.length);
   const limits = ROOM_SETTING_LIMITS;
   const times = TIME_CHOICES.filter((m) => m === 0 || (m * 60 >= limits.timeLimit.min && m * 60 <= limits.timeLimit.max));
@@ -422,7 +573,11 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
       window.setTimeout(() => setCopied(false), COPIED_MS);
     }
   };
-  const row = (i: number) => ({ '--i': i }) as CSSProperties;
+  const pickMap = (id: string) => {
+    showMap(id);
+    online?.setMatchSettings({ mapId: id });
+    picking.stay();
+  };
 
   return (
     <>
@@ -477,7 +632,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
 
         <div className="menu-body lobby">
           {/* A · share: the loudest thing on the screen, and the first to arrive */}
-          <section className="poster halftone-ink lobby__share m-p3" style={row(0)} aria-labelledby="share-title">
+          <section className="poster halftone-ink lobby__share" aria-labelledby="share-title">
             {/* inside the card's corner: overhanging, the header's room code covered it (audit 28 Oct) */}
             <span className="btn__sticker" style={{ right: 18, top: 14 }}>
               <span data-bind="room.slotsLeft">{open}</span> {open === 1 ? 'slot' : 'slots'} left
@@ -519,7 +674,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                   {copied ? (
                     <button className="btn btn--paper btn--sm linkt__done m-p8 mf-swap-in" type="button" key="copied" onClick={blurAfter(() => void copy())}>
                       <Icon name="check" />
-                      Copied ✓
+                      Copied
                     </button>
                   ) : (
                     <button className="btn btn--paper btn--sm m-p8 mf-swap-in" type="button" key="copy" onClick={blurAfter(() => void copy())}>
@@ -544,7 +699,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
           </section>
 
           {/* B · the roster */}
-          <section className="card card--print lobby__squad m-p3" style={row(1)} aria-labelledby="squad-title">
+          <section className="card card--print lobby__squad" aria-labelledby="squad-title">
             <div className="lobby__head">
               <h2 id="squad-title" className="display">
                 Roster <RollNum value={lobby.players.length} />
@@ -552,8 +707,10 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
               </h2>
               <span className={allReady ? 'status status--ok' : 'status status--busy'}>
                 <Icon name={allReady ? 'ok' : 'clock'} size="sm" />
+                {/* the count rolls (P4); the rest of the line is readyLine's */}
                 <span data-bind="room.readyCount">
-                  <RollNum value={readyCount} /> of {people.length} ready
+                  <RollNum value={count.ready} />
+                  {readyLine(lobby.players).slice(String(count.ready).length)}
                 </span>
               </span>
             </div>
@@ -591,7 +748,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
           </section>
 
           {/* C · the mission */}
-          <section className="card card--print lobby__set m-p3" style={row(2)} aria-labelledby="set-title">
+          <section className="card card--print lobby__set" aria-labelledby="set-title">
             <div className="lobby__head">
               <h2 id="set-title" className="display">
                 Mission
@@ -632,6 +789,11 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                   <b>Custom rules</b>
                 </span>
               ) : null}
+            </div>
+            {/* the map first: one row with its poster, never a grid cut at the card's edge (UX-22) */}
+            <div className="lobby__map">
+              <span className="label">Map</span>
+              <MapRow id={mapId} host={host} onOpen={picking.ask} />
             </div>
             {host && (
               <div className="lobby__opts">
@@ -697,15 +859,6 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                 />
               </div>
             )}
-            <span className="label">Map</span>
-            <div className="maps" role="radiogroup" aria-label="Map" data-bind="room.map">
-              {lobbyMaps(lobby.mapId).map((id, i) => (
-                <MapCard key={id} id={id} picked={id === mapId} disabled={!host} lazy={i >= 4} onSelect={() => {
-                  showMap(id);
-                  online?.setMatchSettings({ mapId: id });
-                }} />
-              ))}
-            </div>
           </section>
         </div>
 
@@ -719,53 +872,17 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                 Warm-up: move and shoot freely. Nothing counts until the match starts.
               </p>
               <span className="menu-top__spacer"></span>
-              {lobby.ready ? (
-                <button className="btn btn--ghost btn--xl m-p8" type="button" role="switch" aria-checked="true" data-pad-first={!host || !enough || undefined} onClick={blurAfter(() => online?.setReady(false))}>
-                  <Icon name="check" />
-                  You're ready
-                </button>
-              ) : (
-                <button
-                  className="btn btn--ghost btn--xl m-p8"
-                  type="button"
-                  role="switch"
-                  aria-checked="false"
-                  // a controller lands on the match, never on Leave (audit 2, N-04): a guest's Ready, a host's Start now
-                  data-pad-first={!host || !enough || undefined}
-                  onClick={(e) => {
-                    remember('start', e.currentTarget);
-                    blurAfter(() => online?.setReady(true))(e);
-                  }}
-                >
-                  <Icon name="check" />
-                  Ready
-                </button>
-              )}
+              {/* one action each (UX-21): the host starts it, a guest says they're ready */}
               {host ? (
-                <button
-                  className={allReady ? 'btn btn--paper btn--xl m-p8 mf-glow' : 'btn btn--paper btn--xl m-p8'}
-                  type="button"
-                  data-pad-first
-                  disabled={!enough}
-                  title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`}
-                  onClick={(e) => {
-                    remember('start', e.currentTarget);
-                    blurAfter(() => online?.startMatch())(e);
-                  }}
-                >
-                  <Icon name="play" />
-                  <span className="btn__stack">
-                    Start now
-                    <span className="btn__sub">
-                      {readyCount} of {people.length} ready
-                    </span>
-                  </span>
-                </button>
+                <HostStart lobby={lobby} xl />
               ) : (
-                <p className="lobby__wait">
-                  <span className="spinner"></span>
-                  Waiting for {playerName(hostName, false)} to start, or everyone ready
-                </p>
+                <>
+                  <p className="lobby__wait">
+                    <span className="spinner"></span>
+                    Waiting for {playerName(hostName, false)} to start
+                  </p>
+                  <GuestReady ready={lobby.ready} xl />
+                </>
               )}
             </>
           )}
@@ -773,6 +890,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
       </div>
     </Screen>
     {leaving.asking && <LeaveRoomConfirm onStay={leaving.stay} />}
+    {picking.asking && host && <MapSheet current={mapId} onPick={pickMap} onClose={picking.stay} />}
     </>
   );
 }

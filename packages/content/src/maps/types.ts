@@ -217,6 +217,11 @@ export interface MapTier {
 export interface MapDef {
   id: string;
   name: string;
+  /**
+   * A grey-box test map (training, mechanics checks): a room's map list leaves it out unless the page
+   * asks for the test armory (?armory=1) or the room is already on it (UX-22).
+   */
+  test?: boolean;
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
   solids: MapPolygon[];
   oneWays: MapOneWay[];

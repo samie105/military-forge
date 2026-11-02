@@ -26,7 +26,7 @@ const ZONE_KEYS = ['id', 'kind', 'rect', 'points', 'launch', 'event', 'label', .
 const EVENT_KEYS = ['id', 'kind', 'name', 'description', 'duration', 'warning', 'gustPeriod', 'windFlip', 'pickOneZone', ...MODIFIER_KEYS];
 const SPAWNER_KEYS = ['id', 'pool', 'spots', 'first', 'respawn', 'maxActive'];
 const ONE_WAY_KEYS = ['ax', 'ay', 'bx', 'by', 'blocksBullets'];
-const TOP_KEYS = ['$schema', 'id', 'name', 'bounds', 'solids', 'oneWays', 'bulletOnly', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events', 'spawners', 'armory', 'tiers'];
+const TOP_KEYS = ['$schema', 'id', 'name', 'test', 'bounds', 'solids', 'oneWays', 'bulletOnly', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events', 'spawners', 'armory', 'tiers'];
 
 class Problems {
   readonly list: string[] = [];
@@ -71,6 +71,7 @@ export function parseMapJson(json: unknown, source = 'map'): MapDef {
     p.keys('$', m, TOP_KEYS);
     p.str('$.id', m.id);
     p.str('$.name', m.name);
+    if (m.test !== undefined && typeof m.test !== 'boolean') p.add('$.test', 'must be true or false');
     p.object('$.bounds', m.bounds, (b) => {
       for (const k of ['minX', 'minY', 'maxX', 'maxY']) p.num(`$.bounds.${k}`, b[k]);
     });
@@ -227,6 +228,7 @@ export function mapJsonSchema(): object {
       $schema: { type: 'string' },
       id: { type: 'string', description: 'Unique map id, e.g. "storm-front".' },
       name: { type: 'string' },
+      test: { type: 'boolean', description: 'A grey-box test map: room map lists leave it out unless ?armory=1.' },
       bounds: {
         type: 'object',
         required: ['minX', 'minY', 'maxX', 'maxY'],

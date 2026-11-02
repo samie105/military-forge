@@ -14,11 +14,11 @@ import { createShellStore, runCleanup } from './store';
 import { localMatchRules } from './localMatch';
 import { formatClock, matchView, ordinal, sameView, type MatchView } from './matchView';
 import { matchGain } from './progress';
-import type { LobbyView } from './onlineView';
+import { READY_WORDS, isReady, readyCount, readyLine, type LobbyView } from './onlineView';
 import { Alert, connectStep, reconnectSecondsLeft } from './screens/Connection';
 import { Countdown, countdownState, rulesLine } from './screens/Countdown';
 import { codeLetters, cycleLetter, joinState } from './screens/Join';
-import { LeaveRoomConfirm, Lobby, killsLabel, lobbyMaps, minutesLabel } from './screens/Lobby';
+import { LeaveRoomConfirm, Lobby, MapSheet, killsLabel, lobbyMaps, minutesLabel } from './screens/Lobby';
 import { enterAction, nameState, suggestName } from './screens/NameEntry';
 import { Pause, leaveCost, pauseHeading } from './screens/Pause';
 import { Results, humanMvp, reasonChip, winnerOf, winnerStanding } from './screens/Results';
@@ -427,30 +427,80 @@ describe('lobby (screen 4)', () => {
     expect(html).toContain('Share room link');
     expect(html).toMatch(/<svg viewBox="0 0 \d+ \d+"[^>]*><path fill="var\(--c-qr-dark\)"/);
     expect(html).toMatch(/Roster <span class="num">2<\/span><span class="lobby__of">\/8</);
-    expect(html).toMatch(/<span class="num">1<\/span> of 2 ready/);
+    // the people only, the host counted in (they start it), and it says so (UX-21)
+    expect(html).toContain('<span data-bind="room.readyCount"><span class="num">1</span> of 2 players ready</span>');
 
     expect(html.match(/prow prow--open/g)).toHaveLength(6);
     expect(html).toMatch(/prow is-you.*Ade.*Host.*You/);
     expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>5</);
     expect(html).toContain('Start now');
-    expect(html).toContain("You&#x27;re ready");
+    // the host's one action is Start now (volt, xl): no Ready of their own (UX-21)
+    expect(html).toMatch(/<button class="btn btn--volt m-p8 btn--xl" type="button" data-pad-first="true"[^>]*>(?:(?!<\/button>).)*Start now<span class="btn__sub" data-bind="room.startReady">1 of 2 players ready</);
+    expect(html).not.toMatch(/>Ready<\/button>/);
+    expect(html).not.toContain('You&#x27;re ready');
+    expect(html).not.toContain('Not ready</button>');
+    // the host's own row reads Ready: they start it
+    expect(html).toMatch(/prow is-you[^"]*"(?:(?!<\/li>).)*prow__ready is-ready/);
     // the room's bots (v17): Off / Fill to 4 / Fill to 8, and the level
     expect(html).toContain('Bots fill to 4 · Normal');
     expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>Fill to 4</);
     expect(html).toMatch(/role="radio" aria-checked="false"[^>]*>Off</);
     expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>Normal</);
-    // every map card shows the map's poster (owner 31 Oct: "it's using something dummy"), the drawn thumbnails are gone
-    for (const id of lobbyMaps('movement-test')) expect(html).toContain(`<div class="thumb"><img class="mapart" src="/assets/posters/${id}-card.webp"`);
+    // the room's map is one row with its poster (UX-22: no grid cut at the card's edge); the host's opens the sheet
+    expect(html).not.toContain('class="maps');
+    expect(html).toMatch(/<button type="button" class="mapcard mapcard--row is-picked m-p8" aria-haspopup="dialog" aria-label="Map: Proving Ground\. Change the map"/);
+    expect(html).toContain('<span class="thumb"><img class="mapart" src="/assets/posters/movement-test-card.webp"');
+    expect(html).toContain('Change');
+  });
+
+  it('the map sheet: every room map by its poster, the room\'s own picked and focused first (UX-22)', () => {
+    const html = renderToStaticMarkup(<MapSheet current="street-market" onPick={vi.fn()} onClose={vi.fn()} />);
+    expect(html).toContain('data-screen="map-pick"');
+    for (const id of lobbyMaps('street-market')) expect(html).toContain(`<div class="thumb"><img class="mapart" src="/assets/posters/${id}-card.webp"`);
     expect(html).not.toMatch(/thumb--|thumb__/);
-    // the first rows load at once, the ones further down the list as it scrolls
-    expect(html.match(/loading="eager"/g)).toHaveLength(4);
+    expect(html).toMatch(/aria-checked="true" data-map="street-market" data-pad-first="true"/);
+    expect(html.match(/aria-checked="true"/g)).toHaveLength(1);
+    // the first six load at once, the rest as the sheet scrolls
+    expect(html.match(/loading="eager"/g)).toHaveLength(Math.min(6, lobbyMaps('street-market').length));
+    expect(html).not.toContain('Proving Ground');
+    expect(html).toMatch(/data-pad-back="true">(?:(?!<\/button>).)*Close/);
+  });
+
+  it('the grey-box test maps stay out of a room\'s maps unless ?armory=1 or the room is on one (UX-22)', () => {
+    expect(lobbyMaps('street-market')).not.toContain('movement-test');
+    expect(lobbyMaps('street-market')).not.toContain('mechanics-test');
+    expect(lobbyMaps('street-market')).not.toContain('vertical-test');
+    expect(lobbyMaps('street-market')).toContain('street-market');
+    expect(lobbyMaps('movement-test')).toContain('movement-test');
+    expect(lobbyMaps('movement-test')).not.toContain('mechanics-test');
+    expect(lobbyMaps('street-market', true)).toEqual(expect.arrayContaining(['movement-test', 'mechanics-test', 'vertical-test']));
+    // from the page's address
+    vi.stubGlobal('location', { ...location, search: '?armory=1' });
+    expect(lobbyMaps('street-market')).toContain('movement-test');
+    vi.stubGlobal('location', { ...location, search: '' });
+    expect(lobbyMaps('street-market')).not.toContain('movement-test');
+  });
+
+  it('the ready count is the people\'s, says the bots are always ready, and reads the same on every device (UX-21)', () => {
+    const bot = { id: 2, name: '[BOT] Kestrel', ready: false, host: false, you: false, isBot: true, pingMs: -1 };
+    const people = lobby(true).players;
+    expect(readyLine(people)).toBe('1 of 2 players ready');
+    expect(readyLine([...people, bot])).toBe('1 of 2 players ready · bots are always ready');
+    expect(readyLine([...people, bot], false)).toBe('1 of 2 players ready');
+    expect(readyLine([people[0]!, bot])).toBe('1 of 1 player ready · bots are always ready');
+    expect(readyLine([people[0]!, { ...people[1]!, ready: true }, bot])).toBe('2 of 2 players ready · bots are always ready');
+    expect(readyCount([...people, bot])).toEqual({ ready: 1, people: 2 });
+    // the host is ready by being host, a bot by being a bot; a guest only by saying so
+    expect([isReady(people[0]!), isReady({ ...people[0]!, ready: false }), isReady(people[1]!), isReady(bot)]).toEqual([true, true, false, true]);
+    expect(READY_WORDS).toEqual({ ready: 'Ready', notReady: 'Not ready', youReady: "You're ready", start: 'Start now' });
   });
 
   it('a controller lands on the match, never on Leave; Leave asks first (audit 2, N-04)', () => {
     const host = render(true);
     expect(host).toMatch(/data-pad-leave="true"[^>]*>(?:(?!<\/button>).)*Leave<\/button>/);
     expect(host).toMatch(/data-pad-first="true"[^>]*>(?:(?!<\/button>).)*Start now/);
-    expect(render(false)).toMatch(/role="switch"[^>]*data-pad-first="true"/);
+    // a guest's one action: Ready (volt, xl)
+    expect(render(false)).toMatch(/<button class="btn btn--volt btn--xl m-p8" type="button" data-pad-first="true">(?:(?!<\/button>).)*Ready<\/button>/);
     // the question itself: Stay first, B and Escape are Stay
     const confirm = renderToStaticMarkup(
       <ControllerContext.Provider value={{ leave: vi.fn() } as unknown as ShellController}>
@@ -472,6 +522,16 @@ describe('lobby (screen 4)', () => {
     expect(html).not.toContain('Fill to 8');
     expect(html).toMatch(/prow is-you-guest.*Kemi/);
     expect(html).not.toContain('Start now');
+    expect(html).toContain('Waiting for Ade to start');
+    // a guest reads the map, can't open the sheet
+    expect(html).toMatch(/<div class="mapcard mapcard--row is-picked" data-map="movement-test">/);
+    expect(html).not.toContain('aria-haspopup="dialog"');
+    // ready: the stamp, and Not ready to take it back (UX-21)
+    const ready = render(false, { ...lobby(false), ready: true, players: lobby(false).players.map((p) => (p.you ? { ...p, ready: true } : p)) });
+    expect(ready).toMatch(/<span class="stamp stamp--ok stamp--lg m-p7" role="status">(?:(?!<\/span>).)*<\/svg>You&#x27;re ready<\/span>/);
+    expect(ready).toMatch(/<button class="btn btn--ghost btn--sm m-p8" type="button" data-pad-first="true">Not ready<\/button>/);
+    expect(ready).not.toMatch(/>Ready<\/button>/);
+    expect(ready).toContain('<span class="num">2</span> of 2 players ready');
     expect([minutesLabel(0), killsLabel(0), minutesLabel(120)]).toEqual(['No time limit', 'No kill limit', '2 min']);
     expect(lobbyMaps('movement-test')).not.toContain('mechanics-test');
     expect(lobbyMaps('mechanics-test')).toContain('mechanics-test');
@@ -484,7 +544,7 @@ describe('lobby (screen 4)', () => {
     expect(html).toContain('You&#x27;re watching · you&#x27;ll play when a slot opens');
     expect(html).toContain('Join next round');
     expect(html).not.toContain('Stay watching');
-    expect(html).not.toContain('role="switch"'); // Ready / You're ready
+    expect(html).not.toMatch(/>(Ready|Not ready)<\/button>/);
     expect(html).not.toContain('Start now');
     expect(html).not.toContain('Warm up');
     const queued = render(false, watched, createShellStore({ spectating: true, spectateQueue: 2 }));

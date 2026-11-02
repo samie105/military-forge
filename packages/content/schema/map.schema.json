@@ -25,6 +25,10 @@
     "name": {
       "type": "string"
     },
+    "test": {
+      "type": "boolean",
+      "description": "A grey-box test map: room map lists leave it out unless ?armory=1."
+    },
     "bounds": {
       "type": "object",
       "required": [

@@ -51,7 +51,7 @@
 :where(.kit-v2) .mf-conn__code { font-size: var(--fs-16); }
 :where(.kit-v2) .mf-back-chip { position: absolute; top: 150px; left: 50%; translate: -50% 0; background: var(--c-plate-strong); }
 
-/* Lobby: the link ticket's buttons in a row; Copy link swaps to "Copied ✓" (the new label arrives as the
+/* Lobby: the link ticket's buttons in a row; Copy link swaps to "Copied" (the new label arrives as the
    old one leaves: React swaps the keyed button); the host's Start glows slowly once everyone is ready */
 .mf-linkt__acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 /* a narrow share card (a laptop, big text): the link and its buttons go under the QR */
@@ -69,8 +69,61 @@
 
 /* the folded lobby (placed by app.css): the room code */
 :where(.kit-v2) .mf-lobby-strip__code { font-weight: var(--fw-black); letter-spacing: .08em; }
-/* the mission card's maps scroll inside it when there are more than fit */
-.kit-v2 .lobby__set .maps { flex: 1; min-height: 0; overflow-y: auto; padding: 4px; margin: -4px; scrollbar-width: thin; }
+/* UX-22 · the room's map: one row in the mission card (its poster, name, place and events; the host's
+   says Change and opens the sheet of posters), never a grid cut at the card's edge */
+:where(.kit-v2) .lobby__map { display: flex; flex-direction: column; gap: var(--sp-2); padding-bottom: var(--sp-3); border-bottom: var(--bw) dashed var(--c-line); }
+:where(.kit-v2) .mapcard--row { flex-direction: row; align-items: stretch; width: 100%; color: inherit; }
+:where(.kit-v2) .mapcard--row .thumb { display: block; width: 168px; aspect-ratio: 2 / 1; border-bottom: 0; border-right: var(--bw-chunky) solid var(--c-ink-950); }
+:where(.kit-v2) .mapcard--row .mapcard__body { flex: 1; min-width: 0; justify-content: center; }
+:where(.kit-v2) .mapcard--row :is(.mapcard__name, .mapcard__place) { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:where(.kit-v2) .mapcard--row .mapcard__name { display: block; font-size: var(--fs-28); line-height: 1.05; }
+:where(.kit-v2) .mapcard--row .mapcard__tag { -webkit-line-clamp: 1; }
+:where(.kit-v2) .mapcard--row:hover { transform: none; }
+:where(.kit-v2) .lobby__map-change { flex: none; align-self: center; display: inline-flex; align-items: center; gap: var(--sp-1); margin: 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border: var(--bw) solid var(--c-line-strong); border-radius: var(--r-sm); font-size: var(--fs-16); font-weight: var(--fw-black); letter-spacing: .04em; text-transform: uppercase; }
+:where(.kit-v2) button.mapcard--row:hover .lobby__map-change { border-color: var(--c-text); }
+/* a narrow mission card (a laptop): a smaller poster, so the map's name stays whole */
+:where(.kit-v2) .lobby__set { container-type: inline-size; }
+@container (max-width: 640px) {
+  :where(.kit-v2) .mapcard--row .thumb { width: 112px; }
+  :where(.kit-v2) .lobby__map-change { margin: 0 var(--sp-2); padding: var(--sp-1) var(--sp-2); }
+}
+/* the host's map sheet: every room map's poster card, three to a row, over the lobby */
+:where(.kit-v2) [data-screen="map-pick"] { background: var(--c-scrim); }
+:where(.kit-v2) .mf-mapsheet { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: min(1280px, calc(100% - 2 * var(--sp-8))); max-height: calc(100% - 2 * var(--sp-8)); display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-6) var(--sp-7); }
+:where(.kit-v2) .mf-mapsheet .lobby__head .display { font-size: var(--fs-48); }
+:where(.kit-v2) .mf-mapsheet__maps { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: max-content; min-height: 0; overflow-y: auto; padding: 4px; margin: -4px; scrollbar-width: thin; }
+/* the three cards keep the screen's height: the share card (with the room's listing, feat/rooms) ran
+   past the bottom and scrolled the whole lobby under its header; now it scrolls inside itself */
+:where(.kit-v2) .lobby { grid-template-rows: minmax(0, 1fr); }
+:where(.kit-v2) .lobby > * { min-width: 0; min-height: 0; }
+.kit-v2 .lobby__share { --share-pad: var(--sp-7); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: var(--share-pad) var(--share-pad) 0; }
+/* its hazard stripe stays at the card's foot while the card scrolls (in the flow, stuck to the bottom) */
+.kit-v2 .lobby__share > .hazard { position: sticky; bottom: 0; flex: none; z-index: 1; margin: auto calc(-1 * var(--share-pad)) 0; }
+/* and when there's more below, the card's foot fades into the stripe (driven by the card's own scroll:
+   a card that doesn't scroll has no timeline, so no fade; at the end of the scroll it's gone) */
+.kit-v2 .lobby__share > .hazard::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 56px; background: linear-gradient(to bottom, transparent, var(--c-volt) 85%); pointer-events: none; opacity: 0; }
+@supports (animation-timeline: scroll()) {
+  .kit-v2 .lobby__share > .hazard::before { animation: mf-share-more linear both; animation-timeline: scroll(nearest); }
+  @keyframes mf-share-more { from { opacity: 1; } 92% { opacity: 1; } to { opacity: 0; } }
+}
+html.mf-narrow .kit-v2 .lobby__share-title { font-size: var(--fs-64); }
+html.mf-narrow .kit-v2 .linkt__qr { width: 104px; height: 104px; }
+/* a roster row keeps one line (the name gives way); only large text wraps its ping and chip under it */
+html:not(.mf-big-text) .kit-v2 .prow { flex-wrap: nowrap; gap: var(--sp-2); }
+html:not(.mf-big-text) .kit-v2 .prow .prow__ready { min-width: 92px; }
+/* a narrow roster (a laptop) gives the name the room: Host is its crown, a bot's "No ping" its icon */
+:where(.kit-v2) .lobby__squad { container-type: inline-size; }
+@container (max-width: 600px) {
+  html:not(.mf-big-text) .kit-v2 .prow .tag--host { font-size: 0; gap: 0; padding-inline: 6px; }
+  html:not(.mf-big-text) .kit-v2 .prow .prow__ping:not(:has(.num)) { font-size: 0; gap: 0; }
+}
+/* narrower still (a 1280 laptop): the ping is its bars (your own round trip is in the header's pill) */
+@container (max-width: 540px) {
+  html:not(.mf-big-text) .kit-v2 .prow .prow__ping .num { display: none; }
+}
+/* UX-21 · a guest who is ready: the stamp, and Not ready beside it to take it back */
+:where(.kit-v2) .lobby__ready { display: inline-flex; align-items: center; gap: var(--sp-5); }
+:where(.kit-v2) .lobby__bar .stamp--lg { background: var(--c-ink-900); }
 
 /* the countdown: its ring empties over each second (app.css's mf-count, from --count-from to --count);
    the kit's pop on the number and GO gives way to the motion spec's P1 and P7 */
@@ -257,7 +310,7 @@ html.mf-narrow.mf-big-text .kit-v2 .home__top .me-chip { padding-right: 6px; }
 html.mf-narrow.mf-big-text .kit-v2 .home__top .tab { padding: 0 var(--sp-3); }
 html.mf-narrow .kit-v2 .lobby { grid-template-columns: 440px minmax(0, 1fr) 520px; gap: var(--sp-5); padding: 0; }
 html.mf-short .kit-v2 .lobby { padding-block: 0 var(--sp-3); }
-html:is(.mf-short, .mf-big-text) .kit-v2 .lobby__share { padding: var(--sp-6); gap: var(--sp-3); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .lobby__share { --share-pad: var(--sp-6); gap: var(--sp-3); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .lobby__share-title { font-size: var(--fs-64); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .linkt__qr { width: 96px; height: 96px; }
 /* Results in the laptop box: narrower side columns so the standings keep every column, a smaller
@@ -330,8 +383,7 @@ html.mf-short .kit-v2 .pause__btn { min-height: var(--btn-h); padding-block: var
 html.mf-short.mf-big-text .kit-v2 .pause__btn { min-height: var(--btn-h-sm); font-size: var(--fs-18); }
 html.mf-short.mf-big-text .kit-v2 .pause__btn .btn__sub { display: none; }
 
-/* the map list keeps whole cards and scrolls, the roster's head wraps under its title */
-:where(.kit-v2) .lobby__set .maps { grid-auto-rows: max-content; }
+/* the roster's head wraps under its title */
 :where(.kit-v2) .lobby__head { flex-wrap: wrap; row-gap: var(--sp-1); }
 :where(.kit-v2) .lobby__head .display { white-space: nowrap; }
 
