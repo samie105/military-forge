@@ -325,6 +325,13 @@ describe('m-results', () => {
     expect(html).toContain('Kill limit reached · 10 kills');
     expect(html).toContain('Kemi wins');
     expect(html).toContain('Share the result');
+    // Play again is the one primary action, the vote inside it; the headline comes first; sharing is paper (UX-40, UX-41)
+    expect(html.match(/btn--volt/g)).toHaveLength(1);
+    expect(html).toMatch(/<button type="button" class="btn btn--volt btn--block[^"]*"[^>]*data-pad-first="true">.*?Play again<span class="pm-res__votes">.*?results\.votes/);
+    expect(html).toMatch(/btn--paper btn--block btn--sm[^"]*"[^>]*>.*?Share the result/);
+    expect(html.indexOf('results.winner')).toBeLessThan(html.indexOf('Play again'));
+    expect(html.indexOf('Play again')).toBeLessThan(html.indexOf('Share the result'));
+    expect(html).not.toContain('Play again?');
     expect(html).not.toContain('pm-hls');
     expect(html).toContain('Lobby');
     expect(html.match(/<i class="on m-p7"><\/i>/g)).toHaveLength(1);
@@ -332,10 +339,14 @@ describe('m-results', () => {
 
   it('voted: the stamp instead of the button; a guest has no Lobby; no MVP: no card', () => {
     const guest = renderToStaticMarkup(<PhoneResults view={view({ voted: true, votes: 2 })} results={results} actions={actions} room={{ isHost: false, hostId: 1, leave: vi.fn() }} />);
-    expect(guest).toContain('Voted');
+    expect(guest).toMatch(/btn--volt btn--block[^"]*"[^>]*disabled="">.*?Voted<span class="pm-res__votes">/);
+    expect(guest).toContain('role="status">2 of 3 voted to play again</span>');
     expect(guest).not.toContain('>Lobby<');
     const noMvp: MatchResults = { ...results, mvpKey: -1, standings: results.standings.map((s) => ({ ...s, mvp: false })) };
     expect(renderToStaticMarkup(<PhoneResults view={view()} results={noMvp} actions={actions} training={{ leave: vi.fn() }} />)).not.toContain('pm-mvp');
+    // a 0–0 match decorates nobody (UX-41)
+    const blank: MatchResults = { ...results, standings: [standing(1, 'Kemi', 1, { mvp: true }), standing(0, 'Ade', 2)] };
+    expect(renderToStaticMarkup(<PhoneResults view={view()} results={blank} actions={actions} room={{ isHost: true, hostId: 0, leave: vi.fn() }} />)).not.toContain('pm-mvp');
   });
 
   it("training (solo): no vote, Play again leads and Leave below, and a bot's MVP card doesn't take the screen (audit 28 Oct, audit 2 P-03)", () => {
@@ -354,7 +365,9 @@ describe('m-results alone against bots (audit 2 P-02, P-03)', () => {
   const alone: MatchResults = { ...results, standings: [standing(2, '[BOT] Kestrel', 1, { isBot: true, score: 9, kills: 9, mvp: true }), standing(0, 'Ade', 2, { score: 2, kills: 2 }), standing(3, '[BOT] Mantis', 3, { isBot: true, score: 1 })] };
   it('the player is the headline, no bot MVP card, Play again leads (no vote to count)', () => {
     const html = renderToStaticMarkup(<PhoneResults view={view({ humans: 1 })} results={alone} actions={actions} room={{ isHost: true, hostId: 0, code: 'KMTXRA', leave: vi.fn() }} code="KMTXRA" />);
-    expect(html).toMatch(/results\.winner">2nd place · Kestrel won</);
+    // the bot that won says it is one: its avatar's badge and the Bot tag before its name (UX-40)
+    expect(html).toMatch(/results\.winner">2nd place · <span class="tag tag--bot pm-result__bot">.*?Bot<\/span>Kestrel won</);
+    expect(html).toMatch(/pm-result__av[^>]*>.*?avatar__bot/);
     expect(html).not.toContain('pm-mvp');
     expect(html).not.toContain('results.votes');
     expect(html).toMatch(/btn--volt btn--block[^"]*"[^>]*>.*?Play again/);

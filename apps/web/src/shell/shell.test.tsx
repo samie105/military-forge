@@ -21,7 +21,7 @@ import { codeLetters, cycleLetter, joinState } from './screens/Join';
 import { LeaveRoomConfirm, Lobby, killsLabel, lobbyMaps, minutesLabel } from './screens/Lobby';
 import { enterAction, nameState, suggestName } from './screens/NameEntry';
 import { Pause, leaveCost, pauseHeading } from './screens/Pause';
-import { Results, reasonChip, winnerOf } from './screens/Results';
+import { Results, humanMvp, reasonChip, winnerOf, winnerStanding } from './screens/Results';
 import { NameTagPreview, autoText, resetPatch } from './screens/Settings';
 import { dashTip } from './screens/Tips';
 
@@ -161,7 +161,7 @@ describe("results (the kit's screen 10)", () => {
     expect(html).toContain('data-screen="results"');
     expect(html).toMatch(/data-active-state="kill-limit host not-voted"/);
     expect(html).toContain('Debrief · Match 2 · Lunar Outpost');
-    expect(html).toMatch(/res__name[^>]*>Ade</);
+    expect(html).toMatch(/res__name[^>]*><span class="mf-res__fit"[^>]*>Ade</);
     expect(html).toContain('Kill limit reached · 10 kills');
     expect(html).toMatch(/results\.me\.placement">1st</);
     expect(html).toContain('1,234');
@@ -171,14 +171,19 @@ describe("results (the kit's screen 10)", () => {
     expect(html).toContain('Play again');
     expect(html).toContain('Back to lobby');
     expect(html).toContain('Leave room');
-    expect(html).toMatch(/results\.votes">0\/2</);
+    expect(html).toMatch(/results\.votes" aria-hidden="true">0\/2</);
+    // the count said in words, in the button (the screen reader's name for it)
+    expect(html).toContain('<span class="vh">0 of 2 voted</span>');
   });
 
   it('a guest has no Back to lobby; a vote shows as cast; a closed room says so', () => {
     const guest = renderToStaticMarkup(<Results view={view({ phase: MatchPhase.Postgame, voted: true, votes: 1 })} results={results} actions={actions} room={{ isHost: false, hostId: 0, leave: vi.fn() }} />);
     expect(guest).not.toContain('Back to lobby');
     expect(guest).toContain('You voted');
-    expect(guest).toMatch(/results\.votes">1\/2 · 7 s</);
+    expect(guest).toMatch(/results\.votes" aria-hidden="true">1\/2 · 7 s</);
+    // the vote stays in the primary slot, as cast (disabled), and a landed vote is said
+    expect(guest).toMatch(/<button class="btn btn--volt btn--xl btn--block[^"]*" type="button" data-pad-first="true" disabled="">.*?You voted/);
+    expect(guest).toContain('role="status">1 of 2 voted, 7 seconds left</span>');
     expect(guest).toMatch(/<i class="on m-p7"><\/i><i><\/i>/);
     const closed = renderToStaticMarkup(<Results view={view({ phase: MatchPhase.Closed })} results={results} actions={actions} />);
     expect(closed).toContain('Room closed');
@@ -253,10 +258,94 @@ describe('results alone against bots (audit 2 P-02, P-03, P-06)', () => {
     expect(html).toContain('Back to lobby');
   });
 
-  it('with people, a person still gets the MVP card and sharing leads', () => {
+  it('with people, a person still gets the MVP card; Play again still leads, its vote inside it, and Share is second (UX-40)', () => {
     const html = withShell(<Results view={view({ results })} results={results} actions={actions} room={{ ...room, code: 'KMTXRA' }} />);
     expect(html).toContain('results.mvp');
-    expect(html).toMatch(/btn--volt btn--xl btn--block[^"]*"[^>]*>(?:(?!<\/button>).)*Share the room/);
+    // the one volt button is Play again, the first control of the column, where a controller lands
+    expect(html.match(/btn--volt/g)).toHaveLength(1);
+    expect(html).toMatch(/<section class="res__share"[^>]*><button class="btn btn--volt btn--xl btn--block[^"]*" type="button" data-pad-first="true">(?:(?!<\/button>).)*Play again(?:(?!<\/button>).)*results\.votes/);
+    expect(html).not.toMatch(/btn--volt[^"]*"[^>]*>(?:(?!<\/button>).)*Share the room/);
+    expect(html).toMatch(/btn--paper btn--block[^"]*"[^>]*>(?:(?!<\/button>).)*Share the room/);
+    // the order: Play again, Share, the ways out, then the MVP card
+    const at = (t: string) => html.indexOf(t);
+    expect(at('Play again')).toBeLessThan(at('Share the room'));
+    expect(at('Share the room')).toBeLessThan(at('Back to lobby'));
+    expect(at('Leave room')).toBeLessThan(at('results.mvp'));
+    expect(html).not.toContain('Play again?');
+  });
+
+  it('a bad loss to a bot: the line names it as a bot', () => {
+    const html = renderToStaticMarkup(<Results view={view({ humans: 1 })} results={alone} actions={actions} room={room} />);
+    expect(html).toMatch(/res__line"><span class="tag tag--bot mf-res__tag">.*?Bot<\/span>Badger won · /);
+  });
+});
+
+describe('results: a bot winner, the standings rows, the MVP rule (UX-40, UX-41)', () => {
+  // a room with two people where a bot took it
+  const botWin: MatchResults = {
+    ...results,
+    reason: MatchEndReason.TimeLimit,
+    standings: [standing(2, '[BOT] Kestrel', 1, { isBot: true, score: 3, kills: 3, deaths: 2, mvp: true }), standing(5, '[BOT] Badger', 2, { isBot: true, score: 2, kills: 2 }), standing(4, 'Atlas1442723', 3, { deaths: 1 }), standing(6, 'Atlas4980', 4, { deaths: 1 })],
+  };
+  const room = { isHost: true, hostId: 4, code: 'KMTXRA', leave: vi.fn() };
+
+  it("the poster shows the bot's own soldier with the Bot tag, never a bare trophy; the headline says it is a bot", () => {
+    const html = renderToStaticMarkup(<Results view={view({ results: botWin })} results={botWin} actions={actions} room={room} />);
+    expect(html).toContain('class="mf-res__who"');
+    expect(html).not.toContain('mf-res__trophy');
+    expect(html).toMatch(/class="mf-res__bot" aria-hidden="true"><span class="tag tag--bot">.*?Bot<\/span>/);
+    expect(html).toMatch(/res__name[^>]*><span class="mf-res__fit" style="--len:7"><span class="vh">Bot <\/span>Kestrel</);
+    expect(html).toMatch(/res__stamp[^>]*>Winner</);
+    // a bot is never the MVP
+    expect(html).not.toContain('results.mvp');
+  });
+
+  it("a person's win shows their soldier too; a draw keeps the trophy", () => {
+    const won = renderToStaticMarkup(<Results view={view({ results })} results={results} actions={actions} room={room} />);
+    expect(won).toContain('mf-res__who');
+    expect(won).not.toContain('mf-res__bot');
+    const tie: MatchResults = { ...results, standings: [standing(4, 'Ade', 1, { score: 3 }), standing(9, 'Tunde', 1, { score: 3 })] };
+    expect(renderToStaticMarkup(<Results view={view({ results: tie })} results={tie} actions={actions} room={room} />)).toContain('mf-res__trophy');
+  });
+
+  // a shell where friends work (signed in, online): the rows' Add friend and report / block; minor: an under-18 profile
+  const withFriends = (node: import('react').ReactNode, minor = false) => {
+    const store = createShellStore();
+    store.setState({ profile: { nickname: 'Atlas1442723', offline: false, minor } as never });
+    const shell = { store, api: { authed: () => true, onSignIn: () => () => {}, ping: () => new Promise(() => {}) }, go: vi.fn(), notify: vi.fn(), shareLink: vi.fn() } as unknown as ShellController;
+    return renderToStaticMarkup(<ControllerContext.Provider value={shell}>{node}</ControllerContext.Provider>);
+  };
+
+  it('a row is one line: the name in its own cut box, tags after it, the actions in a trailing cell', () => {
+    const html = withFriends(<Results view={view({ results: botWin })} results={botWin} actions={actions} room={room} />);
+    expect(html).toMatch(/<span class="mf-standings__name" title="Atlas1442723">Atlas1442723<\/span><span class="tag tag--host mf-tag--mark" title="Host">.*?<span class="vh">Host<\/span><\/span><span class="tag tag--you">You<\/span>/);
+    expect(html).toMatch(/<th scope="col" class="mf-standings__act"><span class="vh">Actions<\/span><\/th>/);
+    // the other person's report / block sits in the row's last cell, not under their name
+    expect(html).toMatch(/Atlas4980<\/span><\/span><\/th>(?:<td[^>]*>[^<]*<\/td>){4}<td class="mf-standings__act"><span class="mf-row-actions">/);
+    expect(html).toContain('aria-label="Report, block or mute Atlas4980"');
+    // training has no row actions, so no column for them; nor has an under-18 player (no friends, no reports: audit 2 L-03)
+    expect(withFriends(<Results view={view({ humans: 1 })} results={botWin} actions={actions} training={{ leave: vi.fn() }} />)).not.toContain('mf-standings__act');
+    expect(withFriends(<Results view={view({ results: botWin })} results={botWin} actions={actions} room={room} />, true)).not.toContain('mf-standings__act');
+  });
+
+  it('the winner row and the MVP: a draw has no winner; nobody is decorated for a match without a kill; "1 kill"', () => {
+    const p = (name: string, score: number, isBot = false) => ({ name, score, isBot });
+    expect(winnerStanding([p('A', 3), p('B', 2, true)])).toMatchObject({ name: 'A' });
+    expect(winnerStanding([p('A', 3), p('B', 3)])).toBeNull();
+    expect(winnerStanding([])).toBeNull();
+    expect(humanMvp([{ mvp: true, isBot: false, kills: 0 }])).toBeUndefined();
+    expect(humanMvp([{ mvp: true, isBot: true, kills: 4 }])).toBeUndefined();
+    expect(humanMvp([{ mvp: true, isBot: false, kills: 1 }])).toBeDefined();
+    expect(reasonChip({ reason: MatchEndReason.KillLimit, durationTicks: ticks(60) }, 1).text).toBe('Kill limit reached · 1 kill');
+  });
+
+  it('training: Play again leads, Leave is a quiet button after it; once pressed it says so', () => {
+    const solo: MatchResults = { ...results, standings: [standing(0, '[BOT] Mantis', 1, { isBot: true, score: 5, kills: 5 }), standing(4, 'Ade', 2, { score: 1, kills: 1 })] };
+    const html = renderToStaticMarkup(<Results view={view({ humans: 1 })} results={solo} actions={actions} training={{ leave: vi.fn() }} />);
+    expect(html).toMatch(/<section class="res__share"[^>]*><button class="btn btn--volt btn--xl btn--block[^"]*" type="button" data-pad-first="true">.*?Play again<\/button>/);
+    expect(html).toMatch(/mf-res__more"><button class="btn btn--ghost[^"]*" type="button" data-pad-leave="true">.*?Leave</);
+    const pressed = renderToStaticMarkup(<Results view={view({ humans: 1, voted: true })} results={solo} actions={actions} training={{ leave: vi.fn() }} />);
+    expect(pressed).toMatch(/btn--volt btn--xl btn--block[^"]*" type="button" data-pad-first="true" disabled="">.*?Starting again/);
   });
 });
 

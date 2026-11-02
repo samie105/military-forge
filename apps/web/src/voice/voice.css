@@ -16,6 +16,11 @@
 .vc-screen .vc-radio { position: absolute; }
 /* desktop: bottom left over the vitals (the push-to-talk plate's old place), voices to its right */
 .vc-screen:not(.vc-screen--phone) .vc-radio { left: calc(var(--safe-l) + var(--hud-m)); bottom: calc(var(--safe-b) + 214px); flex-direction: row-reverse; align-items: center; }
+/* desktop Results: bottom right, under the right column's buttons, voices to its left (UX-40: bottom
+   left sat on the debrief's XP row) */
+.vc-screen--results:not(.vc-screen--phone) .vc-radio { left: auto; right: calc(var(--safe-r) + var(--hud-m)); bottom: calc(var(--safe-b) + var(--hud-m)); flex-direction: row; }
+.vc-screen--results:not(.vc-screen--phone) .vc-chips { align-items: flex-end; }
+.vc-screen--results:not(.vc-screen--phone) .vc-radio__air { order: -1; }
 /* phones: on the top bar, left of the menu button (TR 4 mm), voices to its left */
 /* (in screen px, whatever the phone frame's zoom: the menu button it sits beside isn't zoomed) */
 .vc-screen--phone .vc-radio { --rd: max(46px, calc(44px / var(--phone-fit, 1))); right: calc(var(--safe-r) + 62px / var(--phone-fit, 1)); top: calc(var(--safe-t) + 2px); gap: 6px; }

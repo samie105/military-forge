@@ -114,6 +114,9 @@ function useMinor(): boolean {
   return useSyncExternalStore(ctl?.store ? ctl.store.subscribe : () => () => {}, get, get);
 }
 
+/** The match is over: Results is the screen (shell/App.tsx). */
+const ENDED: ReadonlySet<MatchPhase> = new Set([MatchPhase.Ending, MatchPhase.Postgame, MatchPhase.Closed]);
+
 /** The room's voice: the radio in a match, the comms sheet when open. Nothing outside online rooms, or with voice chat off. */
 export function VoiceHud({ shell, chat = voiceChat }: { shell: ShellStore; chat?: VoiceChat }) {
   const minor = useMinor();
@@ -121,6 +124,8 @@ export function VoiceHud({ shell, chat = voiceChat }: { shell: ShellStore; chat?
   const talking = useVoice((s) => s.talking, chat);
   const screen = useStoreSel(shell, (s) => s.screen.name);
   const phase = useStoreSel(shell, (s) => s.match?.phase ?? null);
+  // the match is over and Results is up: the radio moves out of the debrief's way (UX-40)
+  const results = useStoreSel(shell, (s) => !!s.match?.results) && phase !== null && ENDED.has(phase);
   const overlay = useStoreSel(shell, (s) => s.overlay);
   const open = useCommsOpen();
   const phone = usePhoneLayout();
@@ -147,7 +152,7 @@ export function VoiceHud({ shell, chat = voiceChat }: { shell: ShellStore; chat?
       {radio && (
         <div className={`mf-fit ${phone ? 'mf-fit--phone ' : ''}kit-v2 mf-voice`}>
           {/* a card over the radio: it stays (measured), hidden and untouchable, until the card goes */}
-          <section ref={box} className={`screen screen--game vc-screen${phone ? ' screen--phone vc-screen--phone' : ''}${covered && !talking ? ' is-covered' : ''}`} data-screen="voice" aria-label="Voice chat">
+          <section ref={box} className={`screen screen--game vc-screen${phone ? ' screen--phone vc-screen--phone' : ''}${results ? ' vc-screen--results' : ''}${covered && !talking ? ' is-covered' : ''}`} data-screen="voice" aria-label="Voice chat">
             <CommsRadio chat={chat} phone={phone} />
           </section>
         </div>

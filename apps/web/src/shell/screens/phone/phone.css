@@ -34,10 +34,14 @@ html.reduce-motion .mf-fit--phone { --m-rise: 0px; }
 .mf-fit--phone { --pm-head: min(var(--text-scale, 1), 1.15); }
 .mf-fit--phone .pm { overflow-y: auto; overscroll-behavior: contain; }
 .mf-fit--phone :is(.pm-poster__t, .pm-share__t, .pm-pause__t) { font-size: calc(48px * var(--pm-head)); }
-.mf-fit--phone :is(.pm-h, .pm-tk .display, .pm-roster__h .display, .pm-result .display, .pm-sheet__head .display) { font-size: calc(28px * var(--pm-head)); }
+.mf-fit--phone :is(.pm-h, .pm-tk .display, .pm-roster__h .display, .pm-sheet__head .display) { font-size: calc(28px * var(--pm-head)); }
+/* the result is the screen's headline (UX-41) */
+.mf-fit--phone .pm-result .display { font-size: calc(var(--fs-36) * var(--pm-head)); }
 .mf-fit--phone .pm-score__row .display { font-size: calc(36px * var(--pm-head)); }
 .mf-fit--phone .pm-mvp .mvp__big { font-size: calc(88px * var(--pm-head)); }
-.mf-fit--phone .pm-mvp .mvp__name { font-size: calc(48px * var(--pm-head)); }
+/* a long name stays on the card: it shrinks with its length (--len, PhoneResults.tsx; UX-41) */
+.pm-mvp .mvp__inner { container-type: inline-size; }
+.mf-fit--phone .pm-mvp .mvp__name { font-size: min(calc(48px * var(--pm-head)), calc(100cqi / var(--len, 1) / 0.56)); overflow-wrap: anywhere; }
 .mf-fit--phone .pm-name { font-size: calc(36px * var(--pm-head)); }
 .mf-fit--phone .pm-brand .display { font-size: calc(24px * var(--pm-head)); }
 
@@ -81,14 +85,27 @@ html.reduce-motion .mf-fit--phone { --m-rise: 0px; }
 .pm-score .hud-label { white-space: nowrap; }
 
 /* ---- results ---- */
+/* a column taller than the phone starts at its top (UX-41: centred, its first line sat above the
+   screen where no scroll reaches) */
+.pm--res { align-items: safe center; }
 .pm-mvp { rotate: 1.5deg; transform: none; }
-.pm-result { display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; -webkit-mask: none; mask: none; border: 2px solid var(--c-ink-950); }
+.pm-result { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; padding: 8px 14px; -webkit-mask: none; mask: none; border: 2px solid var(--c-ink-950); }
+.pm-result__text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .pm-result .label { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-14); letter-spacing: 0.04em; }
-.pm-result .display { font-size: var(--fs-28); color: var(--c-paper-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-voted { font-size: var(--fs-16); margin-left: auto; }
+/* the headline wraps rather than cutting the winner's name */
+.pm-result .display { font-size: var(--fs-28); line-height: 0.95; color: var(--c-paper-text); overflow-wrap: anywhere; }
+.pm-result .mf-tres { flex-basis: 100%; }
+/* the winner's soldier, with the bot badge when a bot won (UX-40) */
+.pm-result__av { flex: none; width: 44px; height: 44px; }
+.pm-result__bot { font-family: var(--f-ui); vertical-align: 0.2em; margin-right: 6px; }
+.pm-result__bot .ic { width: 14px; height: 14px; }
+/* Play again carries the room's vote: its pips and count after the words */
+.pm-res__votes { display: inline-flex; align-items: center; gap: 6px; margin-left: var(--sp-2); font-size: var(--fs-16); }
+.pm-res__votes .votes__pips { color: inherit; }
+.pm-res__votes .votes__pips > i { background: currentColor; opacity: 0.3; }
+.pm-res__votes .votes__pips > i.on { opacity: 1; }
 .pm-res__more { display: flex; gap: 8px; }
 .pm-res__more .btn { flex: 1; }
-.pm-vote .pips i.on { background: var(--c-volt); }
 
 /* ---- shared: the share chip, the bottom sheet ---- */
 .pm-chip { position: absolute; right: 14px; top: 10px; z-index: var(--z-local-2); background: var(--c-ink-900); font-size: var(--fs-16); pointer-events: none; }
@@ -378,13 +395,15 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 .pm-res .mf-debrief { margin: 0; padding: 6px 10px; gap: 4px; }
 .pm-res .mf-debrief p { font-size: 14px; }
 .pm-res .mf-debrief .ic { width: 16px; height: 16px; }
-.pm-res .mf-debrief .btn { min-height: var(--touch-min, 48px); flex: none; }
+.pm-res .mf-debrief .btn { min-height: var(--touch-min, 48px); flex: none; white-space: nowrap; }
 /* a 375 px phone holds two of its lines (what you did, the next order); meanwhile the eyebrow (the Debrief
    says it) and the winner's reason line (the MVP card says it) step aside; a taller one may still scroll */
 .pm-res .mf-debrief > p:not(:first-child):not(.mf-debrief__next) { display: none; }
 .pm-res:has(.mf-debrief) > .eyebrow,
 .pm-res:has(.mf-debrief) .pm-result .label { display: none; }
 .pm-res:has(.mf-debrief) { overflow-y: auto; min-height: 0; scrollbar-width: none; overscroll-behavior: contain; }
+/* the room's radio (top right, voice.css) beside the debrief's first line (shown even with the Debrief), not over the headline */
+.pm-res.pm-res--radio > .eyebrow { display: flex; align-items: center; flex: none; min-height: calc(var(--touch-min, 48px) + 12px); padding-right: calc(var(--touch-min, 48px) * 2 + var(--sp-6)); }
 /* First flight: Restart it, or Skip training, side by side under Resume */
 .pm-pause__tour { display: flex; gap: 8px; }
 .pm-pause__tour .btn { flex: 1; min-height: var(--touch-min, 48px); }

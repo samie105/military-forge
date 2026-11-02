@@ -58,8 +58,9 @@ export function DebriefLines() {
           <span>
             <b>{d.next.title}</b> · {d.next.reason}
           </span>
+          {/* the easier start says what it is: Results' own Play again is the one "Play again" on the screen (UX-41) */}
           <button type="button" className="btn btn--paper btn--sm m-p8" onClick={() => take(top, again ? 1 : 0)}>
-            {top.cta}
+            {top.id === AGAIN ? top.title : top.cta}
           </button>
         </p>
       )}
