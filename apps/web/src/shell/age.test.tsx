@@ -8,11 +8,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountPanel } from './account/AccountPanel';
 import { accountErrorText } from './account/model';
-import { AGE_KEY, adultOnDevice, ageOnDevice, answerAge, birthYears, stepBirthYear } from './age';
+import { AGE_KEY, adultOnDevice, ageOnDevice, answerAge, birthYears, stepBirthYear, yearDigits } from './age';
+import { alertFromApiError } from './alerts';
 import { Api, ApiError, type AccountInfo } from './api';
 import { ControllerContext } from './context';
 import { RECRUIT_MATCHES, ShellController, type GameHost } from './controller';
-import { AgeGate } from './screens/AgeGate';
+import { AgeGate, ageEyebrow } from './screens/AgeGate';
 import { AgeQuestion, ageAnswered } from './screens/AgeQuestion';
 import type { LobbyView } from './onlineView';
 import type { MatchView } from './matchView';
@@ -271,7 +272,8 @@ describe('the gate before online rooms', () => {
     expect(store.getState().screen).toEqual({ name: 'age', then: { to: 'create' }, refused: true });
     ctl.go({ to: 'home' });
     ctl.go({ to: 'join', code: 'KMTXRA' });
-    expect(store.getState().screen).toEqual({ name: 'age', then: { to: 'join', code: 'KMTXRA' }, refused: true });
+    // asked from Home: the refusal is drawn over it (UX-02)
+    expect(store.getState().screen).toEqual({ name: 'age', then: { to: 'join', code: 'KMTXRA' }, refused: true, over: 'home' });
     expect(createRoom).not.toHaveBeenCalled();
   });
 
@@ -305,31 +307,38 @@ describe('the gate before online rooms', () => {
   });
 });
 
-describe('the step on screen', () => {
-  const render = (refused: boolean) =>
+describe('the 18+ card on screen (UX-02: one card for the question and both refusals)', () => {
+  const ctl = { go: vi.fn(), answerAge: vi.fn(), peekRoom: vi.fn(async () => null) } as unknown as ShellController;
+  const render = (props: Partial<Parameters<typeof AgeGate>[0]> = {}) =>
     renderToStaticMarkup(
-      <ControllerContext.Provider value={{} as ShellController}>
-        <AgeGate refused={refused} />
+      <ControllerContext.Provider value={ctl}>
+        <AgeGate refused={false} {...props} />
       </ControllerContext.Provider>,
     );
 
   it('asks the year once (no second "18 or older" box: audit 28 Oct), nothing picked, and links the Terms', () => {
-    const html = render(false);
+    const html = render();
     const t = textOf(html);
     expect(t).toContain('Online play is 18+');
     expect(t).toContain('Year you were born');
     expect(t).not.toContain('I am 18 or older');
     expect(html).not.toContain('type="checkbox"');
-    expect(html).toMatch(/<option value="" selected="">Choose…<\/option>/);
     expect(html).toContain('href="/terms.html"');
     expect(html).toContain('href="/privacy.html"');
     expect(html).toMatch(/<button type="submit"[^>]*disabled=""/);
   });
 
-  it('is a dialog that holds a form, not a form playing a dialog (audit 28 Oct)', () => {
-    const html = render(false);
-    expect(html).toMatch(/<section[^>]*class="age-card"[^>]*role="dialog"[^>]*>.*<form class="age-card__form"/s);
-    expect(html).not.toMatch(/<form[^>]*role="dialog"/);
+  it('the year is the kit stepper, not the native select: a spin button, empty, with the arrows either side', () => {
+    const html = render();
+    expect(html).not.toContain('<select');
+    const field = /<input[^>]*id="age-year"[^>]*>/.exec(html)?.[0] ?? '';
+    expect(field).toContain('role="spinbutton"');
+    expect(field).toContain('inputMode="numeric"');
+    expect(field).toContain('value=""');
+    expect(field).toContain('aria-valuetext="Not picked"');
+    expect(field).not.toContain('aria-valuenow');
+    expect(field).toContain('maxLength="4"');
+    expect(html).toMatch(/aria-label="One year earlier"[^>]*>.*id="age-year".*aria-label="One year later"/s);
   });
 
   it('the question: only the year they turn 18 adds the birthday, nothing picked', () => {
@@ -337,6 +346,7 @@ describe('the step on screen', () => {
     const turns18 = String(new Date().getUTCFullYear() - 18);
     expect(q('1995')).not.toContain('18th birthday');
     expect(q('')).not.toContain('18th birthday');
+    expect(q(turns18.slice(0, 3))).not.toContain('18th birthday'); // half typed: not a year yet
     const html = q(turns18);
     expect(textOf(html)).toContain('Have you had your 18th birthday yet? Yes Not yet');
     expect(html.match(/type="radio"/g)).toHaveLength(2);
@@ -347,11 +357,50 @@ describe('the step on screen', () => {
     expect(ageAnswered({ year: '', turned18: null })).toBe(false);
   });
 
-  it('the refusal is polite and has no way to answer again', () => {
-    const html = render(true);
-    expect(textOf(html)).toContain('Sorry, online play is for adults');
-    expect(textOf(html)).toContain('is for players 18 and over');
+  it('is a paper dialog that holds a form, not a form playing a dialog (audit 28 Oct)', () => {
+    const html = render();
+    expect(html).toMatch(/<section[^>]*class="age-card[^"]*"[^>]*role="dialog"[^>]*aria-modal="true"[^>]*>.*<form class="age-card__form"/s);
+    expect(html).not.toMatch(/<form[^>]*role="dialog"/);
+  });
+
+  it('over Home when asked from there (Home stays drawn, dimmed); else over the game\'s key art, never bare black', () => {
+    expect(render({ overHome: true })).toContain('age-gate--over-home');
+    expect(render({ overHome: true })).not.toContain('age-gate__art');
+    expect(render()).toMatch(/<img class="age-gate__art"[^>]*src="\/assets\/posters\/quick-match\.webp"/);
+    expect(render()).toContain('age-gate__scrim');
+  });
+
+  it("a room link names the room on the card (its host once the API says)", () => {
+    expect(textOf(render({ then: { to: 'join', code: 'KMTXRA' } }))).toContain('Room KMTXRA · 18+');
+    expect(ageEyebrow({ code: 'KMTXRA', host: 'Kemi' })).toBe("Kemi's room · KMTXRA");
+    expect(ageEyebrow(null)).toBe('Forged Force · 18+');
+  });
+
+  it('the refusal is the same card, stamped, polite, with Training and no way to answer again; no code line', () => {
+    const html = render({ refused: true });
+    const t = textOf(html);
+    expect(html).toMatch(/class="age-card[^"]*"[^>]*role="alertdialog"/);
+    expect(html).toMatch(/class="stamp stamp--bad stamp--lg age-card__stamp[^"]*">18\+ only</);
+    expect(t).toContain('Sorry, online play is for adults');
+    expect(t).toContain('is for players 18 and over');
+    expect(t).toContain('Training against bots is open to everyone.');
+    expect(html).toMatch(/<button[^>]*class="btn btn--volt[^"]*"[^>]*>.*Training<\/button>/);
     expect(html).not.toContain('<select');
+    expect(html).not.toContain('age-year');
+    expect(t).not.toMatch(/Code|ADULTS_ONLY/);
+    // no nudge to change the answer
+    expect(t).not.toMatch(/change your answer|try again|wrong year/i);
+  });
+
+  it("the account's refusal (the API's adults_only) is that same card over Home, not an alert with a code", () => {
+    const html = render({ refused: true, account: true, overHome: true });
+    const t = textOf(html);
+    expect(html).toContain('age-card');
+    expect(html).not.toContain('conn ticket');
+    expect(t).toContain('Online play is for adults');
+    expect(t).toContain('Training against bots is open to everyone.');
+    expect(t).not.toMatch(/Code|ADULTS_ONLY|Sorry/);
+    expect(alertFromApiError(new ApiError(403, 'adults_only', 'x')).kind).toBe('adults-only');
   });
 });
 
@@ -373,7 +422,7 @@ describe('Save your account: one 18+ question (the gate\'s), and the Terms', () 
     expect(t).toContain('Accounts are for players 18 and over.');
     expect(t).not.toContain('I am 18 or older');
     expect(html).not.toContain('type="checkbox"');
-    expect(html).toMatch(/<option value="" selected="">Choose…<\/option>/);
+    expect(html).toMatch(/<input[^>]*id="[^"]*age-year"[^>]*role="spinbutton"[^>]*value=""/);
     expect(t).toContain('Saving means you agree to the Terms');
   });
 
@@ -437,9 +486,19 @@ describe('the year with a controller or the arrow keys (audit 2, N-01)', () => {
     expect(stepBirthYear('2019', 'PageUp', years)).toBe('2021');
     expect(stepBirthYear('2017', 'ArrowLeft', years)).toBe('2017');
   });
-  it('leaves other keys to the browser (up and down open or walk the list as always)', () => {
-    expect(stepBirthYear('2019', 'ArrowUp', years)).toBeNull();
+  it('a spin button: up and down step a year too; typing and other keys are left to the field', () => {
+    expect(stepBirthYear('2019', 'ArrowUp', years)).toBe('2020');
+    expect(stepBirthYear('2019', 'ArrowDown', years)).toBe('2018');
     expect(stepBirthYear('2019', 'Enter', years)).toBeNull();
+    expect(stepBirthYear('2019', '7', years)).toBeNull();
+  });
+  it('a typed year keeps four digits only, and is an answer only once it is whole', () => {
+    expect(yearDigits('19a9-0x5')).toBe('1990');
+    expect(yearDigits('  1 9 9')).toBe('199');
+    expect(ageAnswered({ year: '199', turned18: null })).toBe(false);
+    expect(ageAnswered({ year: '1990', turned18: null })).toBe(true);
+    // a half-typed year steps from where it lands (clamped to the list)
+    expect(stepBirthYear('19', 'ArrowRight', years)).toBe('2017');
   });
   it('reaches 1990 from nothing in five presses with the real list', () => {
     const now = Date.UTC(2026, 10, 1);

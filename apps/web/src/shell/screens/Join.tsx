@@ -180,7 +180,8 @@ export function Join() {
           <span className="menu-top__spacer"></span>
           <NetPill />
         </header>
-        <div className="menu-body join">
+        {/* mf-join: the side column's width, and one column under html.mf-narrow (UX-10: at 1280–1440 the help ticket and the local-room card ran off the right edge) */}
+        <div className="menu-body join mf-join">
           <div className="join__main">
             <span className="eyebrow">Private room</span>
             <h1 id="join-title" className="display display--print join__title m-p1">
@@ -283,6 +284,13 @@ export function Join() {
             <p className="mf-join__local">A local room's code works here too: friends on the same Wi-Fi type it like any other.</p>
           </div>
           <div className="mf-join__side">
+          {/* a narrow window's help: one line instead of the ticket */}
+          <p className="ticket mf-join__where">
+            <Icon name="link" />
+            <span>
+              The code is the last 6 letters of the room link: …/r/<mark>KMTXRA</mark>
+            </span>
+          </p>
           <aside className="ticket join__help" aria-label="Where to find the code">
             <span className="label">Where to find it</span>
             <b className="display join__help-title">At the end of the link</b>

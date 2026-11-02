@@ -21,7 +21,7 @@ import type { MapEventBanner as MapEventBannerView } from './mapEventBanner';
 import { holdLoading } from './mapLoading';
 import { formatClock, type MatchView } from './matchView';
 import { AgeGate } from './screens/AgeGate';
-import { Alert, Connecting, MapLoading, ReconnectBanner, connectStep } from './screens/Connection';
+import { Alert, Connecting, MapLoading, ReconnectBanner, connectStep, useNetCause } from './screens/Connection';
 import { Countdown, useCountdown } from './screens/Countdown';
 import { Home } from './screens/Home';
 import { Join } from './screens/Join';
@@ -100,6 +100,10 @@ function AppScreens({ store }: { store: ShellStore }) {
   }, [phase]);
 
   let body = null;
+  // over the screen: the 18+ card (UX-02), drawn over a dimmed Home when it was asked from there (Home
+  // keeps its place in the tree, so it isn't drawn again when the card goes)
+  let over = null;
+  const home = phone ? <PhoneHome store={store} /> : <Home store={store} />;
   switch (screen.name) {
     case 'boot':
       // the page's own loading screen (index.html) stays up until the first real screen
@@ -108,16 +112,21 @@ function AppScreens({ store }: { store: ShellStore }) {
       body = phone ? <PhoneNameEntry store={store} first /> : <NameEntry store={store} first />;
       break;
     case 'age':
-      body = <AgeGate refused={screen.refused === true} phone={phone} />;
+      if (screen.over === 'home') body = home;
+      over = <AgeGate refused={screen.refused === true} phone={phone} then={screen.then} overHome={screen.over === 'home'} />;
       break;
     case 'home':
-      body = phone ? <PhoneHome store={store} /> : <Home store={store} />;
+      body = home;
       break;
     case 'finding':
       body = <Connecting code={screen.code} step={0} creating={screen.creating} onCancel={() => ctl.go({ to: 'home' })} />;
       break;
     case 'error':
-      body = <Alert alert={screen.alert} onRejoin={screen.retry ? () => ctl.go(screen.retry!) : null} />;
+      // the account said under 18: the 18+ card's refusal over Home, the same card the device's answer gets
+      if (screen.alert.kind === 'adults-only') {
+        body = home;
+        over = <AgeGate refused phone={phone} overHome account />;
+      } else body = <Alert alert={screen.alert} onRejoin={screen.retry ? () => ctl.go(screen.retry!) : null} />;
       break;
     case 'room':
       body = <RoomScreen store={store} code={screen.code} />;
@@ -137,6 +146,7 @@ function AppScreens({ store }: { store: ShellStore }) {
   return (
     <>
       {body}
+      {over}
       {tips && playing && inRoomYet && !overlay && !inLobby && (!live || tipsAsked) && (phone ? <PhoneTips /> : <TipsCard bindings={shown.bindings} doubleTapDash={shown.doubleTapDash} />)}
       {overlay === 'menu' && (phone ? <PhonePause store={store} /> : <Pause store={store} />)}
       {overlay === 'settings' && (phone ? <PhoneSettings store={store} /> : <SettingsScreen store={store} />)}
@@ -183,6 +193,8 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
 
   const loading = useLoadingHold(connection?.state === 'connected', !!match, match?.phase === MatchPhase.Waiting);
   const failed = connection?.state === 'failed';
+  // a failed room's card names the cause: the API asked once (our server down, or no internet: UX-16)
+  const net = useNetCause(failed && !local);
   // the network came back while the Lost card shows: rejoin by itself, once (audit L-18)
   useEffect(() => {
     if (!failed || typeof window === 'undefined') return undefined;
@@ -201,7 +213,7 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
   if (loading) {
     return <MapLoading code={code} lobby={lobby} mapName={lobby?.mapName || match?.mapName || ''} haveMatch={!!match} load={loading} bindings={bindings} onCancel={() => ctl.leave()} />;
   }
-  if (failed) return <Alert alert={alertFromConnection(connection, code, watching, local)} onRejoin={() => ctl.rejoin()} />;
+  if (failed) return <Alert alert={alertFromConnection(connection, code, watching, local, net)} onRejoin={() => ctl.rejoin()} />;
   const host = lobby?.players.find((p) => p.host);
   return (
     <>

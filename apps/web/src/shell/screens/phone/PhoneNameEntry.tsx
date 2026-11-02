@@ -19,7 +19,8 @@ import { useCtl } from '../../context';
 import { useLevelNumber } from '../Progress';
 import type { ShellStore } from '../../store';
 import { joiningLine, useJoining } from '../joining';
-import { NAME_MAX, NAME_MIN, nameState, suggestName, useEnterKey } from '../NameEntry';
+import { NAME_MAX, NAME_MIN, canSaveName, nameState, nextChangeLine, suggestName, useEnterKey } from '../NameEntry';
+import { refusedLine, sentence } from '../../nameRules';
 import { PhoneScreen, rise, useRotated } from './layout';
 import { TurnTip, markTurnTipSeen, useTurnTipSeen } from './TurnTip';
 
@@ -83,10 +84,10 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
 
   const state = error ? 'invalid' : nameState(name, check, current, pending, failed);
   const shown = suggestions.length ? suggestions : (check?.suggestions ?? []);
-  const canContinue = !busy && (state === 'available' || state === 'unchecked' || (state === 'checking' && !!profile?.offline) || (!first && state === 'same'));
+  const canContinue = canSaveName(state, busy, !!profile?.offline);
   const enter = useEnterKey(name, state, canContinue, busy, () => void submit(name.trim()));
   const length = [...name.trim()].length;
-  const changeable = profile?.changeableAt ? new Date(profile.changeableAt) : null;
+  const nextChange = first ? null : nextChangeLine(profile?.changeableAt ?? null);
   const preview = name.trim() || '—';
   const pick = (s: string) => {
     setName(s);
@@ -129,7 +130,8 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
         <div className="pm-ne__form">
           <header className="pm-ne__head m-p3" style={rise(0)}>
             <span className="eyebrow" data-bind="nameEntry.joining">{joining ? joiningLine(joining) : first ? 'New recruit' : 'Your callsign'}</span>
-            <h1 className="display pm-h">What do we call you?</h1>
+            {/* Edit name isn't the first run's question (C-35) */}
+            <h1 className="display pm-h">{first ? 'What do we call you?' : 'Change your name'}</h1>
           </header>
 
           <div className="pm-ne__row m-p3" style={rise(1)}>
@@ -138,7 +140,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
                 className="pm-ne__field"
                 data-bind="nameEntry.value"
                 value={name}
-                maxLength={32}
+                maxLength={NAME_MAX}
                 autoComplete="nickname"
                 autoCorrect="off"
                 spellCheck={false}
@@ -179,13 +181,13 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
             {(state === 'taken' || (state === 'invalid' && shown.length > 0)) && (
               <span className="status status--bad">
                 <Icon name="bad" />
-                {error ?? NICKNAME_REASONS.taken}
+                {refusedLine(error ?? NICKNAME_REASONS.taken!, shown.length > 0)}
               </span>
             )}
             {state === 'invalid' && shown.length === 0 && (
               <span className="status status--bad">
                 <Icon name="bad" />
-                {error ?? NICKNAME_REASONS[check?.reason ?? ''] ?? 'Not allowed'}
+                {sentence(error ?? NICKNAME_REASONS[check?.reason ?? ''] ?? 'Not allowed')}
               </span>
             )}
             {state === 'too-short' && (
@@ -254,11 +256,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
                 </button>
               </>
             )}
-            {changeable && changeable.getTime() > Date.now() && !first ? (
-              <span className="pm-ne__help">Name changes are once a week: next on {changeable.toLocaleDateString()}.</span>
-            ) : (
-              <span className="pm-ne__help">Friends see it in the room, the kill feed and the scores.</span>
-            )}
+            {nextChange ? <span className="pm-ne__help">{nextChange}</span> : <span className="pm-ne__help">Friends see it in the room, the kill feed and the scores.</span>}
           </div>
         </div>
       </form>

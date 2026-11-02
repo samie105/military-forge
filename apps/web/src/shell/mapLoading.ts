@@ -24,11 +24,12 @@ export function loadPercent(haveMatch: boolean, load: AssetLoad): number {
   return Math.round(100 * (0.25 + (haveMatch ? 0.15 : 0) + 0.6 * files));
 }
 
-const mb = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
-
-/** The line beside the percentage. */
+/**
+ * The line beside the percentage: what's happening in words, the number is the percentage's (UX-13,
+ * B-34: "85 of 87 · 1.2 MB" was a file and byte count, the developer's view).
+ */
 export function loadLine(haveMatch: boolean, load: AssetLoad): string {
-  if (load.done < load.files) return `Loading the map · ${load.done} of ${load.files}${load.bytes > 0 ? ` · ${mb(load.bytes)}` : ''}`;
+  if (load.done < load.files) return 'Loading the map';
   if (!haveMatch) return 'Getting the battlefield from the server';
   return 'Map loaded';
 }

@@ -565,8 +565,13 @@ describe('join, names, connection, pause and settings', () => {
   });
 
   it("alerts: API errors and close codes in the kit's words", () => {
-    expect(alertFromApiError(new ApiError(404, 'room_not_found', 'x'), 'KMTXRA')).toMatchObject({ kind: 'room-not-found', code: 'ROOM_NOT_FOUND · room KMTXRA', action: 'rejoin' });
-    expect(alertFromApiError(new ApiError(0, 'network', 'down'))).toMatchObject({ kind: 'offline', action: 'rejoin' });
+    // a room that's gone leads Home, Try again beside it (UX-16)
+    expect(alertFromApiError(new ApiError(404, 'room_not_found', 'x'), 'KMTXRA')).toMatchObject({ kind: 'room-not-found', code: 'ROOM_NOT_FOUND · room KMTXRA', action: 'rejoin', lead: 'home' });
+    // no API: the player's connection only when the browser says it's offline; else it may be ours
+    expect(alertFromApiError(new ApiError(0, 'network', 'down'), undefined, { online: false, api: 'checking' })).toMatchObject({ kind: 'offline', action: 'rejoin', lead: 'training' });
+    const down = alertFromApiError(new ApiError(0, 'network', 'down'), undefined, { online: true, api: 'checking' });
+    expect(down).toMatchObject({ kind: 'server-down', stamp: 'No answer', action: 'rejoin', lead: 'training' });
+    expect(down.message).not.toMatch(/wi-?fi|your data/i);
     expect(alertFromApiError(new ApiError(429, 'rate_limited', 'x', { retryAfter: 30 })).message).toBe('Wait 30 s, then try again.');
     const closed = (code: number, detail = '') => alertFromConnection({ code, detail, attempt: 7, lastPingMs: 412, lossPct: 18.2 }, 'KMTXRA');
     expect(closed(4001)).toMatchObject({ kind: 'new-version', action: 'reload' });
@@ -578,7 +583,7 @@ describe('join, names, connection, pause and settings', () => {
     expect(alertFromConnection({ code: 4006, detail: '', attempt: 0, lastPingMs: -1, lossPct: 0 }, 'KMTXRA', true)).toMatchObject({ kind: 'room-not-found', title: 'Nothing to watch', message: expect.stringContaining('Nobody is playing in this room right now') as string, action: 'rejoin' });
     expect(closed(4007, 'the room has closed')).toMatchObject({ kind: 'room-not-found', action: null });
     expect(closed(4007, 'your pass for this room expired: open the room link again')).toMatchObject({ kind: 'refused', action: 'rejoin' });
-    expect(closed(1006)).toMatchObject({ kind: 'connection-lost', code: 'CONNECTION_LOST · last ping 412 ms, 18% loss' });
+    expect(closed(1006)).toMatchObject({ kind: 'connection-lost', code: 'CONNECTION_LOST · 1006 · last ping 412 ms, 18% loss' });
     expect(closed(1006).message).toContain('after 7 tries');
     // no HELLO within 5 s (the room's door): its own alert, not "Connection lost" (review L7)
     // a late HELLO is a busy device, not the network (UX-20): no Wi-Fi blame, no code

@@ -16,10 +16,28 @@ import { useCtl } from '../context';
 import { useLevelNumber } from './Progress';
 import type { ShellStore } from '../store';
 import { joiningLine, useJoining } from './joining';
+import { plainDate, refusedLine, sentence } from '../nameRules';
 import { Backdrop, Hint, Hints, NetPill, rememberCard } from './frame';
 
 export const NAME_MIN = 3;
 export const NAME_MAX = 16;
+
+/**
+ * Whether Save / Continue can go: a free name, one the check couldn't reach (the API decides on
+ * submit), or any name offline. Edit name's unchanged name can't be saved (UX-07: Save was live on
+ * "That's your name now").
+ */
+export function canSaveName(state: NameState, busy: boolean, offline: boolean): boolean {
+  return !busy && (state === 'available' || state === 'unchecked' || (state === 'checking' && offline));
+}
+
+/** The next name change, when one is waiting: "Name changes are once a week: next on 8 Nov." (UX-07: was "11/8/2026") */
+export function nextChangeLine(changeableAt: string | null, now: number = Date.now()): string | null {
+  if (!changeableAt) return null;
+  const at = Date.parse(changeableAt);
+  if (!(at > now)) return null;
+  return `Name changes are once a week: next on ${plainDate(at, now)}.`;
+}
 
 export type NameState = 'available' | 'taken' | 'too-short' | 'checking' | 'unchecked' | 'invalid' | 'empty' | 'same';
 
@@ -149,10 +167,10 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
 
   const state = error ? 'invalid' : nameState(name, check, current, pending, failed);
   const shown = suggestions.length ? suggestions : (check?.suggestions ?? []);
-  const canContinue = !busy && (state === 'available' || state === 'unchecked' || (state === 'checking' && !!profile?.offline) || (!first && state === 'same'));
+  const canContinue = canSaveName(state, busy, !!profile?.offline);
   const enter = useEnterKey(name, state, canContinue, busy, () => void submit(name.trim()));
   const length = [...name.trim()].length;
-  const changeable = profile?.changeableAt ? new Date(profile.changeableAt) : null;
+  const nextChange = first ? null : nextChangeLine(profile?.changeableAt ?? null);
   const preview = name.trim() || '—';
 
   return (
@@ -207,12 +225,23 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
           </figure>
 
           <div className="ne__form">
+            {/* Edit name isn't the first run's question (C-35): it says what it changes */}
             <h1 id="ne-title" className="display display--print ne__title">
-              What do we
-              <br />
-              call you?
+              {first ? (
+                <>
+                  What do we
+                  <br />
+                  call you?
+                </>
+              ) : (
+                <>
+                  Change
+                  <br />
+                  your name
+                </>
+              )}
             </h1>
-            <p className="lead">Friends see this name in the room, the kill feed and the scoreboard. You can change it later on Home.</p>
+            <p className="lead">{first ? 'Friends see this name in the room, the kill feed and the scoreboard. You can change it later on Home.' : 'Friends see the new name in the room, the kill feed and the scoreboard. You can change it once a week.'}</p>
 
             <div className="field">
               <label className="label" htmlFor="ne-input">
@@ -225,7 +254,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
                   className="mf-input__field"
                   data-bind="nameEntry.value"
                   value={name}
-                  maxLength={32}
+                  maxLength={NAME_MAX}
                   autoComplete="nickname"
                   spellCheck={false}
                   aria-label="Your name"
@@ -258,14 +287,13 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
                 {(state === 'taken' || (state === 'invalid' && shown.length > 0)) && (
                   <span className="status status--bad">
                     <Icon name="bad" />
-                    {error ?? NICKNAME_REASONS.taken}
-                    {shown.length > 0 && ' Try one of these:'}
+                    {refusedLine(error ?? NICKNAME_REASONS.taken!, shown.length > 0)}
                   </span>
                 )}
                 {state === 'invalid' && shown.length === 0 && (
                   <span className="status status--bad">
                     <Icon name="bad" />
-                    {error ?? NICKNAME_REASONS[check?.reason ?? ''] ?? 'Not allowed'}
+                    {sentence(error ?? NICKNAME_REASONS[check?.reason ?? ''] ?? 'Not allowed')}
                   </span>
                 )}
                 {state === 'too-short' && (
@@ -302,7 +330,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
                   ))}
                 </div>
               )}
-              {changeable && changeable.getTime() > Date.now() && !first && <p className="ne__help">Name changes are once a week: next on {changeable.toLocaleDateString()}.</p>}
+              {nextChange && <p className="ne__help">{nextChange}</p>}
             </div>
 
             <div className="ne__actions">

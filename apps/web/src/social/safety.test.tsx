@@ -217,7 +217,7 @@ describe('blocking anyone, and the host remove', () => {
   it('a removed player is told plainly, with nothing to retry; suspended and under-18 refusals say what still works', () => {
     expect(alertFromConnection({ code: CloseCode.Removed, detail: '', attempt: 0, lastPingMs: -1, lossPct: 0 }, 'KMTXRA')).toMatchObject({ title: 'Removed from the room', message: 'The host removed you from this room.', action: null });
     const until = suspendedAlert('2026-11-02T12:00:00Z');
-    expect(until.message).toMatch(/^This account can't play online until .+\. Training with bots still works\. If you think this is a mistake, send a report from Settings › Network\.$/);
+    expect(until.message).toMatch(/^This account can't play online until .+\. Training with bots still works\. If you think this is a mistake, send a report from Settings\.$/);
     expect(suspendedAlert(null).code).toBe('ACCOUNT_DISABLED');
     expect(alertFromApiError(new ApiError(403, 'adults_only', 'x'))).toMatchObject({ title: 'Online play is for adults', action: null });
   });

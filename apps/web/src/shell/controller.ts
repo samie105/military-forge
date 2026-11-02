@@ -11,7 +11,8 @@ import { diag } from '../diag/log';
 import { RECRUIT_MATCHES, playNowBotLevel, type BotLevel } from '../tour/facts';
 import type { LocalMode } from '../localMode';
 import { adultOnDevice, ageOnDevice, answerAge } from './age';
-import { alertFromApiError, suspendedAlert } from './alerts';
+import { alertFromApiError, badLinkAlert, suspendedAlert } from './alerts';
+import { plainDate } from './nameRules';
 import { Api, ApiError, NICKNAME_REASONS, type AdultAnswer, type Me, type NicknameCheck, type RoomJoin } from './api';
 import { sanitizePadSettings } from '../gamepad/settings';
 import { sanitizeBindings } from './controls';
@@ -301,6 +302,22 @@ export function intentFromLocation(loc: Pick<Location, 'pathname' | 'search'>): 
   return code ? { to: 'join', code } : { to: 'home' };
 }
 
+/**
+ * A room link that isn't one (`/r/12`, `?room=hello`): what it held, or null when the address names no
+ * room or a good one. It said nothing before and went Home (B-17); now it gets its own card.
+ */
+export function badRoomLink(loc: Pick<Location, 'pathname' | 'search'>): string | null {
+  const path = /^\/r\/([^/]*)\/?$/.exec(loc.pathname);
+  let raw: string | null;
+  try {
+    raw = path ? decodeURIComponent(path[1]!) : new URLSearchParams(loc.search).get('room');
+  } catch {
+    raw = path ? path[1]! : null;
+  }
+  if (raw === null || normalizeRoomCode(raw)) return null;
+  return raw.slice(0, 40);
+}
+
 /** The room's share link on this site. */
 export function roomLink(code: string, origin = location.origin): string {
   return `${origin}/r/${code}`;
@@ -511,6 +528,9 @@ export class ShellController {
     // a device that said under 18 before the account knew (audit-2 L-03): tell it, once
     if (minorOnDevice() && !me.minor) this.markMinor();
     this.go(intent);
+    // a room link that isn't one: say so over Home, rather than landing there without a word (UX-16, B-17)
+    const bad = badRoomLink(location);
+    if (bad !== null && intent.to === 'home') this.set({ screen: { name: 'error', alert: badLinkAlert(bad || undefined), retry: null } });
   }
 
   /**
@@ -588,7 +608,8 @@ export class ShellController {
     this.closeOverlay();
     this.host.stop();
     if (fromHome && !this.nav.has('age')) this.nav.push({ key: 'age', hash: '', popped: () => this.go({ to: 'home' }) });
-    this.set({ screen: { name: 'age', then, ...(age ? { refused: true } : {}) }, match: null, lobby: null, connection: null });
+    // asked from Home: the card is drawn over it (UX-02)
+    this.set({ screen: { name: 'age', then, ...(age ? { refused: true } : {}), ...(fromHome ? { over: 'home' as const } : {}) }, match: null, lobby: null, connection: null });
     return true;
   }
 
@@ -601,13 +622,14 @@ export class ShellController {
     if (record === 'invalid') return 'invalid';
     const screen = this.store.getState().screen;
     const then = screen.name === 'age' ? screen.then : ({ to: 'home' } as const);
+    const over = screen.name === 'age' && screen.over ? { over: screen.over } : {};
     if (!record.adult) {
       diag('age', 'under 18: no online play');
       // friends, search and voice go too (audit-2 L-03), here and on the account
       const p = this.profile;
       if (p) this.set({ profile: { ...p, minor: true } });
       if (this.api.me && !this.api.me.minor) this.markMinor();
-      this.set({ screen: { name: 'age', then, refused: true } });
+      this.set({ screen: { name: 'age', then, refused: true, ...over } });
       return 'refused';
     }
     this.go(then);
@@ -1019,9 +1041,20 @@ export class ShellController {
 
   // ---- names (docs/07 §3) ----
 
-  /** Whose room an invite's code is, for the name screen (null: unknown). */
+  /** Whose room an invite's code is, for the name screen and the 18+ card (null: unknown). */
   peekRoom(code: string): Promise<{ code: string; host: string | null } | null> {
     return this.api.peekRoom(code);
+  }
+
+  /**
+   * Whether the API answers now: a room that failed asks, so its card can tell our game server being
+   * down (the API answers: the player's internet works) from a connection that's gone (UX-16).
+   */
+  apiAnswers(): Promise<boolean> {
+    return this.api.ping().then(
+      () => true,
+      (e: unknown) => e instanceof ApiError && !e.offline,
+    );
   }
 
   checkName(nickname: string): Promise<NicknameCheck> {
@@ -1040,7 +1073,7 @@ export class ShellController {
         this.set({ profile: offlineProfile(nickname) });
       } else if (e.code === 'nickname_taken') return { ok: false, error: NICKNAME_REASONS.taken, suggestions: (e.extra.suggestions as string[] | undefined) ?? [] };
       else if (e.code === 'invalid_nickname') return { ok: false, error: NICKNAME_REASONS[String(e.extra.reason)] ?? e.message };
-      else if (e.code === 'nickname_cooldown') return { ok: false, error: `You can change your name again on ${new Date(String(e.extra.nicknameChangeableAt)).toLocaleDateString()}` };
+      else if (e.code === 'nickname_cooldown') return { ok: false, error: `You can change your name again on ${plainDate(String(e.extra.nicknameChangeableAt))}.` };
       else return { ok: false, error: alertFromApiError(e).message };
     }
     const screen = this.store.getState().screen;

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import type { AssetLoad } from '../../assetLoad';
 import { Icon } from '../../ui/Icon';
 import { Screen, blurAfter } from '../../ui/Screen';
-import { ALERT_LOOK } from '../alerts';
+import { ALERT_LOOK, netNow, type NetCause } from '../alerts';
 import { useCtl, useKeyboardLayout, useTicker } from '../context';
 import { fieldTips, loadLine, loadPercent, threeTips } from '../mapLoading';
 import { formatClock } from '../matchView';
@@ -17,6 +17,7 @@ import { reconnectTries } from '../reconnect';
 import { Backdrop, RollNum } from './frame';
 import { MapPoster, mapIdByName, mapPoster } from '../posters';
 import { ReportSentNote } from '../../diag/SendReport';
+import { diag } from '../../diag/log';
 
 /** 0: the API is finding (or making) the room; 1: the game server is letting us in; 2: the first world update. */
 export type ConnectStep = 0 | 1 | 2;
@@ -45,11 +46,13 @@ const STAMP: Readonly<Record<AlertInfo['kind'], string>> = {
   'room-not-found': 'No room',
   'new-version': 'Update',
   'server-full': 'Busy',
-  'connection-lost': 'Offline',
+  'connection-lost': 'Lost',
   offline: 'Offline',
+  'server-down': 'Server down',
   'slow-down': 'Wait',
   replaced: 'Elsewhere',
   refused: 'Refused',
+  'adults-only': '18+ only',
   error: 'Error',
 };
 const TONE = { warn: 'stamp--warn', bad: 'stamp--bad', info: 'stamp--volt' } as const;
@@ -220,6 +223,34 @@ export function MapLoading({
   );
 }
 
+/**
+ * What the network says while a failed room's card is up (UX-16): the browser's online flag, and the
+ * API asked once (it answers: the player's internet works, so a game server that never let us in is
+ * ours). Follows the browser's online and offline events.
+ */
+export function useNetCause(active: boolean): NetCause {
+  const ctl = useCtl();
+  const [net, setNet] = useState<NetCause>(netNow);
+  useEffect(() => {
+    if (!active) return undefined;
+    let live = true;
+    const ask = () => {
+      setNet({ ...netNow(), api: 'checking' });
+      void ctl.apiAnswers().then((up) => live && setNet((n) => ({ ...n, api: up ? 'up' : 'down' })));
+    };
+    ask();
+    const onOffline = () => setNet((n) => ({ ...n, online: false }));
+    window.addEventListener('online', ask);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      live = false;
+      window.removeEventListener('online', ask);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, [active, ctl]);
+  return net;
+}
+
 /** The tries as pips: done ones filled, the one under way lit (`now`), failed ones marked. */
 export function TryPips({ made, of, failed = false }: { made: number; of: number; failed?: boolean }) {
   return (
@@ -299,19 +330,38 @@ export function ReconnectBanner({ connection, playing = true }: { connection: Co
   );
 }
 
+/**
+ * A room that can't be reached or has ended: the paper card, stamped with what happened, one line on
+ * it, and the way on. The code is for the report log only (UX-16, D-16: "Code CONNECTION_LOST" on the
+ * card read as a crash). `lead`: the volt button is Training (our server is down: bots still work) or
+ * Home (the room is gone), with "Try again" beside it; otherwise the action leads.
+ */
 export function Alert({ alert, onRejoin }: { alert: AlertInfo; onRejoin: (() => void) | null }) {
   const ctl = useCtl();
   const look = ALERT_LOOK[alert.kind];
+  useEffect(() => {
+    diag('alert', `${alert.kind}: ${alert.code || alert.title}`);
+  }, [alert.kind, alert.code, alert.title]);
+  const retry = alert.action === 'rejoin' && onRejoin;
+  const retryWord = alert.lead || !(alert.kind === 'connection-lost' || alert.kind === 'offline') ? 'Try again' : 'Rejoin';
+  const home = (volt: boolean) => (
+    <button key="home" className={`btn ${volt ? 'btn--volt' : 'btn--ghost'} btn--xl m-p8`} type="button" onClick={blurAfter(() => ctl.go({ to: 'home' }))}>
+      <Icon name="back" />
+      Home
+    </button>
+  );
   return (
     <ConnFrame states={[alert.kind]} label={alert.title}>
-      <div className="conn ticket m-p1" role="alertdialog" aria-labelledby="conn-alert">
+      <div className="conn ticket m-p1" role="alertdialog" aria-labelledby="conn-alert" aria-describedby="conn-alert-body">
         <span className="tape" style={{ left: '46%', top: -12 }} aria-hidden="true"></span>
-        <span className={`stamp ${TONE[look.tone]} stamp--lg conn__stamp m-p7`}>{STAMP[alert.kind]}</span>
+        <span className={`stamp ${TONE[look.tone]} stamp--lg conn__stamp m-p7`}>{alert.stamp ?? STAMP[alert.kind]}</span>
         <Icon name={look.icon} className="conn__ghost" />
         <h1 id="conn-alert" className="display conn__title">
           {alert.title}
         </h1>
-        <p className="conn__body">{alert.message}</p>
+        <p id="conn-alert-body" className="conn__body">
+          {alert.message}
+        </p>
         {alert.tries && (
           <p className="conn__body mf-conn__tries">
             <TryPips made={alert.tries.made} of={alert.tries.of} failed />
@@ -321,50 +371,84 @@ export function Alert({ alert, onRejoin }: { alert: AlertInfo; onRejoin: (() => 
             tries failed
           </p>
         )}
-        {alert.code && <p className="conn__body mf-conn__code num">Code {alert.code}</p>}
         <ReportSentNote />
-        <div className="conn__actions">
-          {alert.action === 'reload' ? (
-            <button className="btn btn--volt btn--xl m-p8" type="button" onClick={() => location.reload()}>
-              <Icon name="refresh" />
-              Reload now
-            </button>
-          ) : alert.action === 'watch' ? (
-            // a full room: watch it (the next free slot is ours when we ask), or try again to play
+        <div className={alert.lead === 'training' ? 'conn__actions mf-conn__actions--three' : 'conn__actions'}>
+          {alert.lead === 'training' ? (
             <>
-              <button className="btn btn--volt btn--xl m-p8" type="button" data-hook="watch" onClick={blurAfter(() => ctl.watchHere())}>
-                <Icon name="eye" />
-                Watch
+              <button className="btn btn--volt btn--xl m-p8" type="button" data-pad-first onClick={blurAfter(() => ctl.go({ to: 'training' }))}>
+                <Icon name="play" />
+                <span className="btn__stack">
+                  Training
+                  <span className="btn__sub">Bots · works offline</span>
+                </span>
               </button>
-              {onRejoin && (
+              {retry && (
                 <button className="btn btn--paper btn--xl m-p8" type="button" onClick={blurAfter(onRejoin)}>
                   <Icon name="refresh" />
-                  Try again
+                  {retryWord}
                 </button>
               )}
+              {home(false)}
             </>
-          ) : alert.action === 'rejoin' && onRejoin ? (
-            <button className="btn btn--volt btn--xl m-p8" type="button" onClick={blurAfter(onRejoin)}>
-              <Icon name="refresh" />
-              {alert.kind === 'connection-lost' || alert.kind === 'offline' ? 'Rejoin' : 'Try again'}
-            </button>
-          ) : alert.kind === 'room-not-found' ? (
-            <button className="btn btn--volt btn--xl m-p8" type="button" onClick={blurAfter(() => ctl.openOverlay('join'))}>
-              <Icon name="keyboard" />
-              Type a code
-            </button>
-          ) : null}
-          {alert.qrSwap && (
-            // a local room the Wi-Fi won't let us see: the host's QR, and ours back (no network needed)
-            <button className="btn btn--paper btn--xl m-p8" type="button" onClick={blurAfter(() => ctl.openOverlay('lan-join'))}>
-              <Icon name="qr" />
-              Swap QR codes
-            </button>
+          ) : alert.lead === 'home' ? (
+            <>
+              {home(true)}
+              {retry ? (
+                <button className="btn btn--ghost btn--xl m-p8" type="button" onClick={blurAfter(onRejoin)}>
+                  <Icon name="refresh" />
+                  {retryWord}
+                </button>
+              ) : (
+                alert.kind === 'room-not-found' && (
+                  <button className="btn btn--ghost btn--xl m-p8" type="button" onClick={blurAfter(() => ctl.openOverlay('join'))}>
+                    <Icon name="keyboard" />
+                    Type a code
+                  </button>
+                )
+              )}
+            </>
+          ) : (
+            <>
+              {alert.action === 'reload' ? (
+                <button className="btn btn--volt btn--xl m-p8" type="button" onClick={() => location.reload()}>
+                  <Icon name="refresh" />
+                  Reload now
+                </button>
+              ) : alert.action === 'watch' ? (
+                // a full room: watch it (the next free slot is ours when we ask), or try again to play
+                <>
+                  <button className="btn btn--volt btn--xl m-p8" type="button" data-hook="watch" onClick={blurAfter(() => ctl.watchHere())}>
+                    <Icon name="eye" />
+                    Watch
+                  </button>
+                  {onRejoin && (
+                    <button className="btn btn--paper btn--xl m-p8" type="button" onClick={blurAfter(onRejoin)}>
+                      <Icon name="refresh" />
+                      Try again
+                    </button>
+                  )}
+                </>
+              ) : retry ? (
+                <button className="btn btn--volt btn--xl m-p8" type="button" onClick={blurAfter(onRejoin)}>
+                  <Icon name="refresh" />
+                  {retryWord}
+                </button>
+              ) : alert.kind === 'room-not-found' ? (
+                <button className="btn btn--volt btn--xl m-p8" type="button" onClick={blurAfter(() => ctl.openOverlay('join'))}>
+                  <Icon name="keyboard" />
+                  Type a code
+                </button>
+              ) : null}
+              {alert.qrSwap && (
+                // a local room the Wi-Fi won't let us see: the host's QR, and ours back (no network needed)
+                <button className="btn btn--paper btn--xl m-p8" type="button" onClick={blurAfter(() => ctl.openOverlay('lan-join'))}>
+                  <Icon name="qr" />
+                  Swap QR codes
+                </button>
+              )}
+              {home(false)}
+            </>
           )}
-          <button className="btn btn--ghost btn--xl m-p8" type="button" onClick={blurAfter(() => ctl.go({ to: 'home' }))}>
-            <Icon name="back" />
-            Home
-          </button>
         </div>
       </div>
     </ConnFrame>

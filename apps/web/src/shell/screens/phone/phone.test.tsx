@@ -438,13 +438,16 @@ describe('phone name entry', () => {
     expect(html).not.toMatch(/kbd|Enter/);
   });
 
-  it('Edit name: the current name, Save allowed as is, Cancel; over Home', () => {
+  it('Edit name: the current name, its own headline, Save off until the name changes (UX-07), Cancel; over Home', () => {
     const store = createShellStore({ profile: { nickname: 'Ade', changeableAt: null, offline: false } as never });
     const html = withCtl(ctl({ checkName: vi.fn(), setName: vi.fn() }), <PhoneNameEntry store={store} first={false} />);
     expect(html).toContain('data-active-state="same"');
     expect(html).toContain('value="Ade"');
     expect(html).toMatch(/pm-id__name[^>]*>Ade</);
-    expect(html).toMatch(/<button type="submit"(?![^>]*disabled)[^>]*>Save/);
+    expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Save/);
+    expect(html).toContain('Change your name');
+    expect(html).not.toContain('What do we call you?');
+    expect(html).toContain('maxLength="16"');
     expect(html).toContain('Cancel');
     expect(html).toContain('mf-fit--modal');
   });

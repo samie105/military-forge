@@ -48,6 +48,9 @@ export function ageOnDevice(): AgeRecord | null {
   }
 }
 
+/** What a typed year field keeps: its digits, four at most (the field is a year, nothing else). */
+export const yearDigits = (text: string): string => text.replace(/\D/g, '').slice(0, 4);
+
 /** This device said 18 or older. */
 export const adultOnDevice = (): boolean => ageOnDevice()?.adult === true;
 
@@ -84,14 +87,18 @@ export function birthYears(now = Date.now()): number[] {
   return Array.from({ length: MAX_AGE - 4 }, (_, i) => year - 5 - i);
 }
 
-/** The year field's own keys: one year with left and right, ten with the page keys (a controller's L1 / R1). */
-const YEAR_STEPS: Readonly<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1, PageDown: -10, PageUp: 10 };
+/**
+ * The year field's own keys (a spin button: UX-02): one year with left and right or down and up, ten
+ * with the page keys (a controller's L1 / R1).
+ */
+const YEAR_STEPS: Readonly<Record<string, number>> = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -10, PageUp: 10 };
 
 /**
- * The year after a key on the year field, or null for a key it leaves to the browser. A controller
- * can't open a select's list, so it steps the year (UX audit 2, N-01: a pad couldn't get past the
- * 18+ question); the keyboard gets the same keys. From nothing picked, the first step shows the
- * youngest year listed (neutral: no answer that gets in comes first); steps stop at either end.
+ * The year after a key on the year field, or null for a key it leaves to the browser (typing the
+ * digits, Tab). A controller has no keys to type with, so it steps the year (UX audit 2, N-01: a pad
+ * couldn't get past the 18+ question); the keyboard and the stepper's arrows get the same steps.
+ * From nothing picked, the first step shows the youngest year listed (neutral: no answer that gets
+ * in comes first); steps stop at either end, and a half-typed year steps from where it would land.
  */
 export function stepBirthYear(current: string, key: string, years: readonly number[] = birthYears()): string | null {
   const by = YEAR_STEPS[key];

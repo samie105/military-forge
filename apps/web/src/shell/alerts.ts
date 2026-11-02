@@ -1,12 +1,35 @@
 /**
  * Why a room didn't work out, in the kit's words (5 · Connection): the API's errors before the game
  * connects, and the game server's close codes after. Pure, so tests can check every case.
+ *
+ * The words decide the cause first (UX-16): the player's own connection is named only when it really
+ * is theirs (the browser says it's offline); our game server not answering while the API does is
+ * ours, and says so. `code` is for the report log (diag), never shown on the card.
  */
 import { CloseCode } from '@military-forge/protocol';
 import { ApiError } from './api';
 import { OFFLINE_TITLE, STILL_WORKS } from './offline';
 import { RECONNECT_WINDOW_MS, reconnectTries } from './reconnect';
 import type { AlertInfo, ConnectionView } from './store';
+
+/** What we know of the network when a room fails: the browser's own word, and whether the API answers. */
+export interface NetCause {
+  /** navigator.onLine: false only when this device has no network at all */
+  online: boolean;
+  /** the API just now: answered (`up`: the player's internet works), didn't (`down`), or still asking */
+  api: 'up' | 'down' | 'checking';
+}
+
+/** What a page knows before it asks the API: the browser's word only. */
+export function netNow(): NetCause {
+  return { online: typeof navigator === 'undefined' || navigator.onLine !== false, api: 'checking' };
+}
+
+/** This device has no internet (the browser says so): the one case the words say it's theirs. */
+const NO_INTERNET = { kind: 'offline', title: "You're offline", message: `This device lost its internet connection. Rejoin once it's back. ${STILL_WORKS}` } as const;
+
+/** The API can't be reached either, yet the device says it's online: ours or theirs, we can't tell. */
+const UNREACHABLE_MESSAGE = `We can't reach the game from here right now. If other sites load, it's on our side: try again in a minute. ${STILL_WORKS}`;
 
 /** "ROOM_FULL · room KMTXRA" */
 function codeLine(name: string, room?: string): string {
@@ -22,48 +45,77 @@ export function suspendedAlert(until: string | null): AlertInfo {
   return {
     kind: 'refused',
     title: "Can't play online right now",
-    message: `This account can't play online${when}. ${STILL_WORKS} If you think this is a mistake, send a report from Settings › Network.`,
+    message: `This account can't play online${when}. ${STILL_WORKS} If you think this is a mistake, send a report from Settings.`,
     code: until ? 'ACCOUNT_SUSPENDED' : 'ACCOUNT_DISABLED',
     action: null,
   };
 }
 
-/** Online play, friends and voice are 18+ (audit-2 L-03); training is open to everyone. */
+/**
+ * Online play, friends and voice are 18+ (audit-2 L-03); training is open to everyone. The account
+ * said under 18: drawn as the 18+ card's refusal (UX-02), not an alert card with a code.
+ */
 export const ADULTS_ONLY_ALERT: AlertInfo = {
-  kind: 'refused',
+  kind: 'adults-only',
   title: 'Online play is for adults',
   message: 'Online rooms, friends and voice are for players 18 and over. Training against bots is open to everyone.',
   code: 'ADULTS_ONLY',
   action: null,
 };
 
-/** An API failure while creating or looking up a room (before the game server is involved). */
-export function alertFromApiError(e: unknown, room?: string): AlertInfo {
+/**
+ * An API failure while creating or looking up a room (before the game server is involved). `net`: the
+ * browser's word on the network (an API that doesn't answer blames the device only when it's offline).
+ */
+export function alertFromApiError(e: unknown, room?: string, net: NetCause = netNow()): AlertInfo {
   if (e instanceof ApiError) {
     if (e.code === 'adults_only') return ADULTS_ONLY_ALERT;
     if (e.code === 'account_disabled') return suspendedAlert(typeof e.extra.until === 'string' ? e.extra.until : null);
+    // a room that's gone leads Home, not "Try again" (UX-16, A-41): trying again rarely brings it back
     if (e.code === 'room_not_found')
-      return { kind: 'room-not-found', title: 'Room not found', message: 'This room has closed, or the link is wrong. Rooms close when everyone leaves.', code: codeLine('ROOM_NOT_FOUND', room), action: 'rejoin' };
-    if (e.code === 'invalid_room_code')
-      return { kind: 'room-not-found', title: 'Not a room code', message: 'Room codes are 6 letters, like KMTXRA. Check the link, or ask your friend to send it again.', code: codeLine('INVALID_ROOM_CODE', room), action: null };
+      return { kind: 'room-not-found', title: 'Room not found', message: 'This room has closed, or the link is wrong. Rooms close when everyone leaves.', code: codeLine('ROOM_NOT_FOUND', room), action: 'rejoin', lead: 'home' };
+    if (e.code === 'invalid_room_code') return badLinkAlert(room);
     if (e.code === 'rate_limited') {
       const wait = Number(e.extra.retryAfter ?? 60);
       return { kind: 'slow-down', title: 'Too many tries', message: `Wait ${Number.isFinite(wait) ? wait : 60} s, then try again.`, code: 'RATE_LIMITED', action: 'rejoin' };
     }
-    if (e.offline)
-      return { kind: 'offline', title: OFFLINE_TITLE, message: `The game server isn't answering. Check your data or Wi-Fi, then try again. ${STILL_WORKS}`, code: codeLine('SERVER_OFFLINE', room), action: 'rejoin' };
-    return { kind: 'error', title: 'Something went wrong', message: e.message, code: `${e.code.toUpperCase()} · HTTP ${e.status}`, action: 'rejoin' };
+    if (e.offline) {
+      if (!net.online) return { ...NO_INTERNET, code: codeLine('NO_INTERNET', room), action: 'rejoin', lead: 'training' };
+      return { kind: 'server-down', stamp: 'No answer', title: OFFLINE_TITLE, message: UNREACHABLE_MESSAGE, code: codeLine('SERVER_OFFLINE', room), action: 'rejoin', lead: 'training' };
+    }
+    // the API's own message is for the log: the player gets a plain line
+    return { kind: 'error', title: 'Something went wrong', message: 'The game hit a problem getting you in. Try again.', code: `${e.code.toUpperCase()} · HTTP ${e.status} · ${e.message}`, action: 'rejoin' };
   }
   // not the API's answer (a bug of ours): the detail is for the console, the player gets a plain line
   console.warn('room: unexpected error', e);
   return { kind: 'error', title: 'Something went wrong', message: 'The game hit a problem getting you in. Try again.', code: 'ERROR', action: 'rejoin' };
 }
 
+/** A room link that isn't one (`/r/12`, a code with the wrong letters): it said nothing before (B-17). */
+export function badLinkAlert(room?: string): AlertInfo {
+  return {
+    kind: 'room-not-found',
+    title: "That link doesn't look right",
+    message: 'Room codes are 6 letters, like KMTXRA. Check the link, or ask your friend to send it again.',
+    code: codeLine('INVALID_ROOM_CODE', room),
+    action: null,
+    lead: 'home',
+  };
+}
+
 /**
  * A room connection that ended for good (onlineMode gave up, or the server refused or kicked us).
  * `watching`: we came to watch (v20), so a retry watches again and a room nobody is in says so.
+ * `net`: what the network says (App.tsx asks the API once the room fails): a game server that never
+ * answered while the API does is ours ("server down"), never the player's Wi-Fi.
  */
-export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 'attempt' | 'lastPingMs' | 'lossPct'>, room: string, watching = false, local = false): AlertInfo {
+export function alertFromConnection(
+  c: Pick<ConnectionView, 'code' | 'detail' | 'attempt' | 'lastPingMs' | 'lossPct'>,
+  room: string,
+  watching = false,
+  local = false,
+  net: NetCause = netNow(),
+): AlertInfo {
   // v22: the host removed us (audit-2 L-11); the room keeps us out, so there's nothing to retry
   if (c.code === CloseCode.Removed) return { kind: 'refused', title: 'Removed from the room', message: 'The host removed you from this room.', code: codeLine('REMOVED', room || undefined), action: null };
   if (local) return alertFromLocal(c, room);
@@ -84,15 +136,15 @@ export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 
         return { kind: 'room-not-found', title: 'Nothing to watch', message: 'Nobody is playing in this room right now. Try again once your friends are in.', code: codeLine('NO_ROOM', room), action: 'rejoin' };
       return { kind: 'server-full', title: 'Server is full', message: 'The server can’t open another room right now. Wait a few seconds and try again.', code: codeLine('NO_ROOM', room), action: 'rejoin' };
     case CloseCode.RateLimited:
-      return { kind: 'server-full', title: 'Too much at once', message: 'Your connection sent more than the server takes at once (or too many tabs joined from here). Rejoin to carry on.', code: codeLine('RATE_LIMITED', room), action: 'rejoin' };
+      return { kind: 'server-full', title: 'Too much at once', message: 'This device sent more than the server takes at once (too many tabs on the room?). Rejoin to carry on.', code: codeLine('RATE_LIMITED', room), action: 'rejoin' };
     case CloseCode.BadMessage:
       return { kind: 'error', title: 'Disconnected', message: 'The server couldn’t read what this browser sent. Reload the page, then rejoin.', code: codeLine('BAD_MESSAGE', room), action: 'reload' };
     case CloseCode.DuplicateSession:
       return { kind: 'replaced', title: 'Opened somewhere else', message: 'You joined this room from another tab or window. Carry on there, or rejoin here.', code: codeLine('DUPLICATE_SESSION', room), action: 'rejoin' };
     case CloseCode.TicketInvalid:
       return /closed/.test(c.detail)
-        ? { kind: 'room-not-found', title: 'Room not found', message: 'This room has closed. Rooms close when everyone leaves.', code: codeLine('ROOM_NOT_FOUND', room), action: null }
-        : { kind: 'refused', title: 'Couldn’t get in', message: c.detail ? `The server said: ${c.detail}.` : 'The server didn’t accept this join. Open the room link again.', code: codeLine('TICKET_INVALID', room), action: 'rejoin' };
+        ? { kind: 'room-not-found', title: 'Room not found', message: 'This room has closed. Rooms close when everyone leaves.', code: codeLine('ROOM_NOT_FOUND', room), action: null, lead: 'home' }
+        : { kind: 'refused', title: 'Couldn’t get in', message: 'The room didn’t accept this join. Open the room link again.', code: codeLine(c.detail ? `TICKET_INVALID · ${c.detail}` : 'TICKET_INVALID', room), action: 'rejoin' };
     case 1008:
       // the room's door closes a connection that doesn't say hello within 5 s; the page sends it the
       // moment the socket opens, so it was the device busy loading (after quiet retries: onlineMode
@@ -104,14 +156,17 @@ export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 
       const tries = c.attempt > 0 ? ` after ${c.attempt} ${c.attempt === 1 ? 'try' : 'tries'}` : '';
       const last = c.lastPingMs >= 0 ? ` · last ping ${c.lastPingMs} ms, ${Math.round(c.lossPct)}% loss` : '';
       const of = Math.max(c.attempt, reconnectTries(RECONNECT_WINDOW_MS));
-      return {
-        kind: 'connection-lost',
-        title: 'Connection lost',
-        message: `${OFFLINE_TITLE}${tries}. Check your data or Wi-Fi, then rejoin. ${STILL_WORKS}`,
-        code: `CONNECTION_LOST${last}`,
-        action: 'rejoin',
-        ...(c.attempt > 0 ? { tries: { made: c.attempt, of } } : {}),
-      };
+      const pips = c.attempt > 0 ? { tries: { made: c.attempt, of } } : {};
+      const code = `CONNECTION_LOST · ${c.code}${last}`;
+      // the device has no internet: the one time it's theirs
+      if (!net.online) return { ...NO_INTERNET, code, action: 'rejoin', lead: 'training', ...pips };
+      // never let in (no round trip heard) while the API answers: our game server is down (UX-16)
+      const never = c.lastPingMs < 0;
+      if (never && net.api === 'up')
+        return { kind: 'server-down', title: 'Our game server isn’t answering', message: `It’s on our side, not your connection. Try again in a minute. ${STILL_WORKS}`, code: `SERVER_DOWN · ${code}`, action: 'rejoin', lead: 'training', ...pips };
+      if (net.api === 'down') return { kind: 'server-down', stamp: 'No answer', title: OFFLINE_TITLE, message: UNREACHABLE_MESSAGE, code: `UNREACHABLE · ${code}`, action: 'rejoin', lead: 'training', ...pips };
+      // had a room (or still asking the API): it dropped; nobody is blamed
+      return { kind: 'connection-lost', title: 'Connection lost', message: `The room stopped answering${tries}. Rejoin to carry on. ${STILL_WORKS}`, code, action: 'rejoin', ...pips };
     }
   }
 }
@@ -151,9 +206,11 @@ export const ALERT_LOOK: Readonly<Record<AlertInfo['kind'], { icon: string; tone
   'new-version': { icon: 'download', tone: 'info' },
   'server-full': { icon: 'server', tone: 'warn' },
   'connection-lost': { icon: 'unplug', tone: 'bad' },
-  offline: { icon: 'unplug', tone: 'bad' },
+  offline: { icon: 'wifi', tone: 'bad' },
+  'server-down': { icon: 'server', tone: 'warn' },
   'slow-down': { icon: 'clock', tone: 'warn' },
   replaced: { icon: 'monitor', tone: 'info' },
   refused: { icon: 'lock', tone: 'bad' },
+  'adults-only': { icon: 'lock', tone: 'bad' },
   error: { icon: 'bad', tone: 'bad' },
 };

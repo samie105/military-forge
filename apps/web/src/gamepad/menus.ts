@@ -15,8 +15,8 @@
  * - `data-pad-y="Join"`: what Triangle / Y presses in a toast (an invite's Join, a request's Accept), and its word in the hint bar;
  * - `data-pad-leave`: a way out (Leave room): the pad only lands on it when moved there, never on its own;
  * - `data-pad-modal`: a card over play that takes the pad when it shows (the first-run controls card).
- * A native <select> (the year you were born) steps with left and right (L1 / R1: ten at a time), as
- * a pad can't open its list.
+ * A native <select> steps with left and right (L1 / R1: ten at a time), as a pad can't open its list;
+ * a spin button (the 18+ card's year) gets the same as keys.
  */
 import { logicalRect } from '../ui/landscape';
 import type { NavDir } from './mapping';
@@ -192,6 +192,8 @@ export function preferredControl(scope: Element): HTMLElement | null {
 }
 
 const isSlider = (el: Element) => el.getAttribute('role') === 'slider' || el.getAttribute('role') === 'spinbutton' || (el instanceof HTMLInputElement && el.type === 'range');
+/** A native range input (stepUp works); a text field with role="spinbutton" (the 18+ card's year) takes the arrow keys instead. */
+const isRange = (el: Element): el is HTMLInputElement => el instanceof HTMLInputElement && el.type === 'range';
 const isSelect = (el: Element): el is HTMLSelectElement => typeof HTMLSelectElement !== 'undefined' && el instanceof HTMLSelectElement;
 /** Controls left and right change (a slider, a spin button, a select) rather than leave. */
 export const stepsSideways = (el: Element | null): boolean => !!el && (isSlider(el) || isSelect(el));
@@ -227,7 +229,7 @@ export function stepFocusedFar(scope: Element, dir: 1 | -1): boolean {
   if (!el || !stepsSideways(el)) return false;
   const key = dir > 0 ? 'PageUp' : 'PageDown';
   if (isSelect(el)) stepSelect(el, key, dir * 10);
-  else if (el instanceof HTMLInputElement) for (let i = 0; i < 10; i++) stepRange(el, dir);
+  else if (isRange(el)) for (let i = 0; i < 10; i++) stepRange(el, dir);
   else sendKey(el, key);
   return true;
 }
@@ -307,7 +309,7 @@ export function moveFocus(scope: Element, dir: NavDir): void {
   const sideways = dir === 'left' || dir === 'right';
   if (sideways && stepsSideways(from)) {
     if (isSelect(from)) stepSelect(from, KEYS[dir][0], dir === 'right' ? 1 : -1);
-    else if (from instanceof HTMLInputElement) stepRange(from, dir === 'right' ? 1 : -1);
+    else if (isRange(from)) stepRange(from, dir === 'right' ? 1 : -1);
     else sendKey(from, ...KEYS[dir]);
     return;
   }

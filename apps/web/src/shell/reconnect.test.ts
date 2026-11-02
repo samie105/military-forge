@@ -37,13 +37,14 @@ describe('the reconnect counter', () => {
     expect(html).toContain('class="is-now"');
   });
 
-  it('the lost card counts the failed tries, shows the code and says Rejoin', () => {
+  it('the lost card counts the failed tries and says Rejoin; the code goes to the log, not the card (UX-16)', () => {
     const alert = alertFromConnection({ code: 1006, detail: '', attempt: 33, lastPingMs: 412, lossPct: 18.2 }, 'KMTXRA');
     expect(alert.tries).toEqual({ made: 33, of: 33 });
     const ctl = {} as ShellController;
     const html = renderToStaticMarkup(createElement(ControllerContext.Provider, { value: ctl }, createElement(Alert, { alert, onRejoin: () => {} })));
     expect(html).toMatch(/<span class="num">33 of 33<\/span> tries failed/);
-    expect(html).toContain('Code CONNECTION_LOST');
+    expect(alert.code).toMatch(/^CONNECTION_LOST/);
+    expect(html).not.toMatch(/Code |CONNECTION_LOST/);
     expect(html).toContain('Rejoin');
     // never heard back at all: no pips
     expect(alertFromConnection({ code: 1006, detail: '', attempt: 0, lastPingMs: -1, lossPct: 0 }, 'KMTXRA').tries).toBeUndefined();

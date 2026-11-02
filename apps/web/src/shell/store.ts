@@ -69,8 +69,11 @@ export type Screen =
   | { name: 'boot' }
   /** choose a name, then carry on to `then` */
   | { name: 'name'; then: Intent }
-  /** the 18+ step before the first online room (age.ts), then `then`; `refused`: this device said under 18 */
-  | { name: 'age'; then: Intent; refused?: boolean }
+  /**
+   * the 18+ step before the first online room (age.ts), then `then`; `refused`: this device said under
+   * 18; `over: 'home'`: asked from Home, so the card is drawn over it (dimmed: UX-02)
+   */
+  | { name: 'age'; then: Intent; refused?: boolean; over?: 'home' }
   | { name: 'home' }
   /** creating (code null) or looking up a room (API), before the game connects */
   | { name: 'finding'; code: string | null; creating: boolean }
@@ -142,7 +145,11 @@ export type AccountIntent = { mode: 'signin' } | { mode: 'reset'; token: string 
  * Why the player can't get into (or stay in) a room, as the kit's connection screen shows it: the
  * kind picks the icon and tone, `code` is the line under the message ("ROOM_FULL · room KMTXRA").
  */
-export type AlertKind = 'room-full' | 'room-not-found' | 'new-version' | 'server-full' | 'connection-lost' | 'offline' | 'slow-down' | 'replaced' | 'refused' | 'error';
+/**
+ * `server-down`: our game server isn't answering while the player's internet works (UX-16: never
+ * "check your Wi-Fi" then); `adults-only`: the account said under 18 (drawn as the 18+ card's refusal).
+ */
+export type AlertKind = 'room-full' | 'room-not-found' | 'new-version' | 'server-full' | 'connection-lost' | 'offline' | 'server-down' | 'slow-down' | 'replaced' | 'refused' | 'adults-only' | 'error';
 
 export interface AlertInfo {
   /** a dropped connection that gave up: the tries made, of the most the window holds (the pips) */
@@ -150,7 +157,15 @@ export interface AlertInfo {
   kind: AlertKind;
   title: string;
   message: string;
+  /** what happened in the report log's words (diag): never shown on the card (UX-16, D-16) */
   code: string;
+  /**
+   * The volt button when it isn't the action: Training (the game server is down: bots still work) or
+   * Home (the room is gone); the action, if any, then sits beside it as "Try again".
+   */
+  lead?: 'training' | 'home';
+  /** the stamp's word when the kind's own would claim too much (the API not answering either: "No answer", not "Server down") */
+  stamp?: string;
   /**
    * The main button: rejoin the room, reload the page, watch the room instead (a full room: Watch,
    * with Try again beside it), or none (Home only).

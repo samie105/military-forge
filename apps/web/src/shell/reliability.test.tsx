@@ -28,8 +28,10 @@ describe('a server draining for an update (L-05)', () => {
     const a = alertFromConnection({ code: CloseCode.ServerUpdating, detail: 'the server is still restarting', attempt: 40, lastPingMs: -1, lossPct: 0 }, 'KMTXRA');
     expect(a).toMatchObject({ title: 'Updating the server', action: 'rejoin', code: 'SERVER_UPDATING · room KMTXRA' });
     expect(a.message).not.toMatch(/Wi-Fi|your data/);
-    // a real drop still says it
-    expect(alertFromConnection({ code: 1006, detail: 'connection lost', attempt: 3, lastPingMs: 40, lossPct: 0 }, 'KMTXRA').message).toMatch(/Wi-Fi/);
+    // a drop names the player's connection only when the browser says it's offline (UX-16)
+    const drop = { code: 1006, detail: 'connection lost', attempt: 3, lastPingMs: 40, lossPct: 0 };
+    expect(alertFromConnection(drop, 'KMTXRA', false, false, { online: true, api: 'up' }).message).not.toMatch(/Wi-Fi|your data|your connection/);
+    expect(alertFromConnection(drop, 'KMTXRA', false, false, { online: false, api: 'down' })).toMatchObject({ kind: 'offline', title: "You're offline" });
   });
 
   it('in the room: the banner says the server is restarting and we come back to the same room', () => {
