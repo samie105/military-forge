@@ -544,11 +544,45 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 /* One Home for every player state (UX atlas 1 Nov, batch 3; shell/homeState.ts) */
 /* under 18: the one quiet line that says why Home is Training, under its two tickets */
 .pm-state-note { margin: 0; padding: 6px 10px; border-radius: var(--r-xs); background: var(--c-paper); color: var(--c-paper-text); font-size: var(--fs-14); font-weight: var(--fw-bold); line-height: var(--lh-snug); }
+/* a Create room that waits (offline, suspended) stays readable over the poster's art: a pale plate, dashed */
+.mf-fit--phone .pm-poster .pm-create-room:disabled { background: color-mix(in srgb, var(--c-paper) 72%, transparent); color: var(--c-paper-text); border-color: color-mix(in srgb, var(--c-paper-text) 55%, transparent); }
 /* the name under the soldier steps down to fit its column instead of cutting off (UX-14: "ATLAS84…") */
 .mf-fit--phone .pm-stage { container-type: inline-size; }
 .mf-fit--phone .pm-stage .pm-name { font-size: min(calc(36px * var(--pm-head)), calc((100cqi - 16px) / (var(--chars, 6) * 0.62))); text-overflow: clip; }
 .mf-fit--phone .pm-tk:disabled > * { opacity: .5; }
 .mf-fit--phone .pm-nav__i:disabled { opacity: .45; cursor: not-allowed; }
 /* "Keep this name?" on the phone's Home keeps to the stage's column, clear of the tickets (the column is the box
-   less the poster's 330, the tickets' 160 and two 12 px gaps) */
-.mf-fit--phone .mf-keepname--phone-home { width: max(200px, calc(100% - var(--safe-l, 44px) - var(--safe-r, 44px) - 514px)); }
+   less the poster's 330, the tickets' 196 and two 12 px gaps: .pm-home above) */
+.mf-fit--phone .mf-keepname--phone-home { width: calc(100% - var(--safe-l, 44px) - var(--safe-r, 44px) - 550px); }
+/* in that narrow column its two answers stack, each the card's width (Change ran past the card's edge) */
+.mf-fit--phone .mf-keepname--phone-home { grid-template-columns: minmax(0, 1fr); }
+.mf-fit--phone .mf-keepname--phone-home .mf-keepname__acts .btn { flex: 1 1 100%; min-width: 0; justify-content: center; padding-inline: 10px; }
+
+/*
+ * Home on a touch tablet (html.mf-tablet: the phone layouts at up to 1.5×, fit.ts). The box is a phone's 812
+ * design pixels wide but taller (a 4:3 tablet lying down: ~609; standing up: ~1080), so Home's columns would
+ * stretch: tickets a screen tall, the name card over the tickets, the squad strip a stub in the stage's corner.
+ * Lying down, the tickets keep a ticket's height and sit in the column's middle. Standing up, Home stacks:
+ * the poster across the top, the tickets in one row under it, the soldier (or Next orders) below.
+ */
+@media (max-aspect-ratio: 16/10) {
+  html.mf-tablet .mf-fit--phone .pm-home > .pm-col { justify-content: center; }
+  html.mf-tablet .mf-fit--phone .pm-home .pm-tk { flex: 0 1 auto; min-height: 96px; padding-inline: 22px 16px; }
+  /* the squad strip sits inside the stage's corner marks, whole */
+  html.mf-tablet .mf-fit--phone .pm-home > .sx-psquad { margin: 14px 16px 0; }
+}
+@media (max-aspect-ratio: 1/1) {
+  html.mf-tablet .mf-fit--phone .pm-home { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto minmax(0, 1fr); }
+  html.mf-tablet .mf-fit--phone .pm-home > .pm-poster { grid-area: 1 / 1 / 2 / -1; min-height: 280px; }
+  html.mf-tablet .mf-fit--phone .pm-home > .pm-poster > .pm-create { align-self: flex-start; min-width: 320px; }
+  html.mf-tablet .mf-fit--phone .pm-home > .pm-col { grid-area: 2 / 1 / 3 / -1; flex-direction: row; align-items: stretch; }
+  html.mf-tablet .mf-fit--phone .pm-home > .pm-col > * { flex: 1 1 0; min-width: 0; }
+  html.mf-tablet .mf-fit--phone .pm-home > .pm-col > .pm-state-note { align-self: center; }
+  html.mf-tablet .mf-fit--phone .pm-home > :is(.pm-stage, .mf-orders, .sx-psquad, .mf-saved--dock) { grid-area: 3 / 1 / 4 / -1; }
+  html.mf-tablet .mf-fit--phone .pm-home > .mf-orders { justify-self: start; width: min(100%, 420px); }
+  html.mf-tablet .mf-fit--phone .pm-home > .sx-psquad { justify-self: end; width: 260px; }
+  html.mf-tablet .mf-fit--phone .pm-home:has(> .mf-orders) > .sx-psquad { align-self: start; margin-bottom: 0; }
+  html.mf-tablet .mf-fit--phone .pm-home > .mf-saved--dock { justify-self: end; width: 260px; }
+  /* the name card over the soldier's corner, off the tickets */
+  html.mf-tablet .mf-fit--phone .mf-keepname--phone-home { width: 300px; }
+}
