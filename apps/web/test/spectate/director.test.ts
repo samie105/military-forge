@@ -47,6 +47,15 @@ describe('spectate director', () => {
     expect(d.update(frame(ps), room, l, act({ prev: true }), 0.016, map, cam)!.followId).toBe(1); // the only one alive
   });
 
+  it('a bot: its name without the "[BOT]" tag, the Bot chip for the rest, in the bar and the picker (UX-32)', () => {
+    const d = new SpectateDirector();
+    const room = { spectating: true, state: state({}), delay: 3 };
+    const ps = [player(0, 10, true, { name: '[BOT] Kestrel', isBot: true }), player(1, 30, true, { name: 'Kemi' })];
+    const v = d.update(frame(ps), room, link(), NO_ACTIONS, 0.016, map, cam)!;
+    expect(v).toMatchObject({ name: 'Kestrel', bot: true });
+    expect(v.rows.map((r) => [r.name, r.bot])).toEqual(expect.arrayContaining([['Kestrel', true], ['Kemi', false]]));
+  });
+
   it('watching: the free camera pans (keys, drags) inside the map and zooms; a click on a soldier follows them', () => {
     const d = new SpectateDirector();
     const l = link();

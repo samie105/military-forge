@@ -99,9 +99,15 @@ describe('a phone’s minimap stays clear of the touch controls', () => {
   it('the top-left of the safe box when nothing is there, as wide as the level’s shape needs', () => {
     const p = phonePlace([], aspect);
     expect(p).toMatchObject({ x: 52, y: 16, h: 72 });
-    expect(p.w).toBe(widthFor(72, 16, aspect, 96, 176));
-    expect(p.w).toBeLessThan(176); // a tall level: a narrower box, no empty sides
-    expect(phonePlace([], 6).w).toBe(176); // a long flat level fills the widest
+    expect(p.w).toBe(widthFor(72, 16, aspect, 96, 168));
+    expect(p.w).toBeLessThan(168); // a tall level: a narrower box, no empty sides
+    expect(phonePlace([], 6).w).toBe(168); // a long flat level fills the widest
+  });
+
+  it('a small phone: past its larger scores button, on the top bar, not down on the HP labels (UX-33)', () => {
+    const scores = { left: 54, top: 12, right: 112, bottom: 70 };
+    const move = { left: 70, top: 187, right: 270, bottom: 421 }; // the dial's box, raised over its labels
+    expect(phonePlace([scores, move], aspect)).toMatchObject({ x: 120, y: 12 });
   });
 
   it('the big map keeps clear of a control below it or beside it, and never shrinks past its minimum', () => {

@@ -6,7 +6,7 @@
  * the ammo the aim dial, so nothing here duplicates them.
  *
  *   top left     the kill line (the newest kill only), or the low-health cue while it lasts; ping
- *   top centre   the clock and the score
+ *   top centre   the clock and the score (yours, then the lead: a rival's portrait for the name, hud.ts)
  *   centre       the reticle (by transform: hud.ts) with the hit, headshot, ricochet, launch and kill
  *                markers (the desktop's), the damage arcs
  *   under clock  the arc warning while a throw is aimed through a map event (the HUD's arc-warning token)
@@ -51,7 +51,7 @@ export function phoneHudTemplate(): string {
   <div class="hud ph">
     <ol class="phud-feed pt-feed" aria-label="Kill feed" data-state="!low-hp"></ol>
     <div class="pt-cue plate" data-state="low-hp+alive" role="status">${ic('hp', 'ic--sm')}<b>Low health</b><span data-bind="player.hpCue"></span></div>
-    <div class="pt-clock plate" data-state="match"><b class="num" data-bind="match.timeLeft"></b><span><span class="hud-label">You</span> <b class="num" data-bind="match.myScore"></b><i></i><span class="hud-label" data-bind="match.leaderShort"></span> <b class="num" data-bind="match.leaderScore"></b></span></div>
+    <div class="pt-clock plate" data-state="match"><b class="num" data-bind="match.timeLeft"></b><span data-state="!spec-watch"><span class="hud-label">You</span> <b class="num" data-bind="match.myScore"></b></span><span class="pt-clock__lead" data-state="lead-chip"><i data-state="!spec-watch"></i><span class="hud-label" data-bind="match.leadShort"></span><span class="pt-clock__face" data-state="lead-face"></span><b class="num" data-bind="match.leadShortScore" data-bind-show="match.leadShortScore"></b></span></div>
     <span class="pt-ping" data-state="net"><span data-bind-attr="class: net.phoneClass"><span class="sig" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span data-bind="net.ping"></span></span><span class="pt-ping__more num" data-bind="net.short"></span></span>
     <span class="pt-arcwarn mf-arcwarn" data-state="arc-warning" role="status">${ic('warn', 'ic--sm')}Arc bends<span data-bind-show="event.name"> · <span data-bind="event.name"></span></span></span>
     <div class="pickup plate pt-pickup" data-state="pickup" role="status" data-bind-attr="data-tone: pickup.item.tone"><svg class="ic ic--sm" aria-hidden="true"><use data-bind-attr="href: pickup.icon"/></svg><span data-state="pickup-item"><b data-bind="pickup.item.title"></b> <span class="pt-pickup__line" data-bind="pickup.item.line"></span></span><span data-state="!pickup-item" data-bind="pickup.text"></span></div>
@@ -70,12 +70,11 @@ export function phoneHudTemplate(): string {
     </div>
     <div class="mf-spec mf-spec--phone" data-state="spectate-bar" role="group" aria-label="Spectating">
       <button type="button" class="mf-spec__thumb" data-spec="prev" aria-label="Previous soldier">${ic('chev-left')}</button>
-      <span class="mf-spec__who plate" role="status"><span class="hud-label" data-bind="spectate.label"></span><b class="display" data-bind="spectate.name"></b><i class="mf-spec__hp" data-state="spec-target" aria-hidden="true"></i><span class="mf-spec__line" data-bind="spectate.line"></span></span>
+      <span class="mf-spec__who plate" role="status"><span class="hud-label" data-bind="spectate.label"></span><span class="mf-spec__name"><b class="display" data-bind="spectate.name"></b><span class="tag tag--bot" data-state="spec-bot">Bot</span></span><i class="mf-spec__hp" data-state="spec-target" aria-hidden="true"></i><span class="mf-spec__line" data-bind="spectate.line"></span></span>
       <button type="button" class="mf-spec__thumb" data-spec="next" aria-label="Next soldier">${ic('chev-right')}</button>
     </div>
     <button type="button" class="mf-spec-pill mf-spec-pill--free" data-spec="free" data-state="spec-watch">${ic('drag', 'ic--sm')}<span data-bind="spectate.freeLabel"></span></button>
     <button type="button" class="mf-spec-pill mf-spec-pill--join" data-spec="join" data-state="spec-watch" data-bind-attr="data-queued: spectate.queued">${ic('play', 'ic--sm')}<span data-bind="spectate.joinShort"></span></button>
-    <span class="mf-spec-tag mf-spec-tag--phone plate" data-state="spec-watch"><i class="mf-spec-dot"></i>Spectating<span data-bind-show="spectate.delay"> · <span data-bind="spectate.delayShort"></span></span></span>
     <span class="mf-spec-tag mf-spec-tag--phone-eyes plate" data-state="spectate-bar" data-bind-show="spectate.watching">${ic('eye', 'ic--sm')}<span data-bind="spectate.watchingShort"></span></span>
     <div class="respawn plate" data-state="spectating" role="status">
       <p class="respawn__by"><span class="hud-label" data-bind="death.label"></span> <b data-bind="death.killer"></b></p>

@@ -14,6 +14,7 @@
 import { SpectateMode, SpectateQueue, type SpectateMsg, type SpectateQueueId } from '@military-forge/protocol';
 import { weapons } from '@military-forge/content';
 import type { MapDef } from '@military-forge/content';
+import { playerName } from '../shell/matchView';
 import type { Frame, PlayerView } from '../view';
 
 export type SpectateKind = 'off' | 'death' | 'watch';
@@ -78,7 +79,9 @@ export interface SpectateView {
   y: number;
   /** zoom level (0 closest; camera ZOOM_MULTIPLIERS) */
   zoom: number;
+  /** the bots' own "[BOT] " tag is left to the Bot chip beside it (`bot`) */
   name: string;
+  bot: boolean;
   /** 0..1 */
   hp: number;
   /** "K-47 · 7 kills" */
@@ -213,7 +216,7 @@ export class SpectateDirector {
     }
     const w = target ? weapons[target.weapons[target.active]?.def ?? -1] : undefined;
     const rows: SpectateRow[] = others
-      .map((p) => ({ id: p.id, name: p.name, alive: p.alive, kills: p.kills ?? 0, deaths: p.deaths ?? 0, bot: p.isBot, followed: !this.free && p.id === this.followId }))
+      .map((p) => ({ id: p.id, name: playerName(p.name, p.isBot), alive: p.alive, kills: p.kills ?? 0, deaths: p.deaths ?? 0, bot: p.isBot, followed: !this.free && p.id === this.followId }))
       .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.id - b.id);
     return {
       kind,
@@ -222,7 +225,8 @@ export class SpectateDirector {
       x: this.x,
       y: this.y,
       zoom: this.zoom,
-      name: target ? target.name : this.free ? 'Free camera' : '',
+      name: target ? playerName(target.name, target.isBot) : this.free ? 'Free camera' : '',
+      bot: !!target?.isBot,
       hp: target ? Math.max(0, Math.min(1, target.hp / 100)) : 0,
       line: target ? [w?.name, `${target.kills ?? 0} ${target.kills === 1 ? 'kill' : 'kills'}`].filter(Boolean).join(' · ') : '',
       delay: kind === 'watch' ? room.delay : 0,

@@ -1403,7 +1403,9 @@ function frame(now: number): void {
   hints?.frame(me ? { alive: me.alive, grounded: me.grounded, fuel: me.fuel } : null); // a tip when one is due
   shell.setMapEvent(f.mapEvent);
   if (minimap) {
-    minimap.setVisible(!covered && shell.store.getState().overlay === null);
+    // not under a menu, and not in the countdown: the VS strip has the top edge until GO
+    const shellState = shell.store.getState();
+    minimap.setVisible(!covered && shellState.overlay === null && shellState.match?.phase !== MatchPhase.Countdown);
     const { halfW, halfH } = camera.halfExtents;
     minimapView.minX = camera.x - halfW;
     minimapView.maxX = camera.x + halfW;

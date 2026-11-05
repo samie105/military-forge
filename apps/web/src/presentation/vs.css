@@ -120,6 +120,8 @@ html.mf-narrow .vs__side--r { right: 140px; }
 .screen--phone .vs__rows { bottom: calc(26px + var(--safe-b)); gap: 8px; }
 .screen--phone .vs__row { gap: 8px; }
 .screen--phone .vs__card { width: 84px; gap: 4px; }
+/* up to five on a row there's room for a long name (a guest's "Atlas8448236"): its card grows, not cut */
+.screen--phone .vs__row:not(:has(> :nth-child(6))) .vs__card:not(.vs__card--compact) { width: auto; min-width: 84px; max-width: 136px; }
 .screen--phone .vs__card.is-you { transform: translateY(-10px); }
 .screen--phone .vs__card.is-you::after { bottom: -7px; height: 3px; }
 .screen--phone .vs__body { width: 84px; height: 126px; }
@@ -151,6 +153,10 @@ html.mf-narrow .vs__side--r { right: 140px; }
 .screen--phone .vs-strip__mode { font-size: var(--fs-12); letter-spacing: .12em; }
 .screen--phone .vs-strip__face { width: 28px; height: 28px; border-width: 2px; }
 .screen--phone .vs-strip__faces { gap: 4px; }
+/* the radio waits while the poster covers the screen; the phone's sits at the top right in play: under
+   the strip while it's up, not over the faces */
+html:has(.vs-screen .vs) .vc-screen .vc-radio { visibility: hidden; }
+html:has(.screen--phone .vs-strip) .vc-screen--phone .vc-radio { top: calc(var(--safe-t) + 52px); }
 
 /* Reduce motion: a 120 ms fade in and out; no slides, no stamp */
 html.reduce-motion .vs, html.reduce-motion .vs * , html.reduce-motion .vs-strip { animation: none !important; }

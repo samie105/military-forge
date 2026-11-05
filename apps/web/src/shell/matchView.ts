@@ -26,6 +26,13 @@ export interface MatchView {
   leaderScore: number;
   /** who leads (ties: the first in the standings); '' when nobody plays */
   leaderName: string;
+  /** the best score among everyone but you, for the lead chip (leadLine); leaderScore when not given */
+  rivalScore?: number;
+  /** who has it (ties: the first in the standings), and their id for the phone's portrait chip (−1: nobody) */
+  rivalName?: string;
+  rivalId?: number;
+  /** more than one of the others has that score */
+  rivalsTied?: boolean;
   /** WAITING: you are ready */
   ready: boolean;
   /** ENDING/POSTGAME: rematch votes so far, humans who can vote, and whether you voted */
@@ -45,15 +52,28 @@ export interface MatchView {
 export function matchView(match: Match, localId: number): MatchView {
   let leaderScore = 0;
   let leaderName = '';
+  let rivalScore = 0;
+  let rivalName = '';
+  let rivalId = -1;
+  let rivalsTied = false;
   let votes = 0;
   let any = false;
-  for (const m of match.players) {
+  for (let id = 0; id < match.players.length; id++) {
+    const m = match.players[id];
     if (!m) continue;
     if (!any || m.score > leaderScore) {
       leaderScore = m.score;
       leaderName = playerName(m.name, m.isBot);
     }
     any = true;
+    if (id !== localId) {
+      if (rivalId < 0 || m.score > rivalScore) {
+        rivalScore = m.score;
+        rivalName = playerName(m.name, m.isBot);
+        rivalId = id;
+        rivalsTied = false;
+      } else if (m.score === rivalScore) rivalsTied = true;
+    }
     if (m.rematch) votes++;
   }
   const me = match.players[localId];
@@ -73,6 +93,10 @@ export function matchView(match: Match, localId: number): MatchView {
     myScore: me?.score ?? 0,
     leaderScore,
     leaderName,
+    rivalScore,
+    rivalName,
+    rivalId,
+    rivalsTied,
     ready: me?.ready ?? false,
     votes,
     humans: match.humanCount(),
@@ -133,6 +157,36 @@ export function resultHeadline(me: Pick<MatchStanding, 'placement' | 'score'>, s
 
 export function kdRatio(s: Pick<MatchStanding, 'kills' | 'deaths'>): string {
   return (s.kills / Math.max(1, s.deaths)).toFixed(2);
+}
+
+/**
+ * What the lead chip says (the HUD, the pause menu's score). Nobody has scored: nothing, or it would
+ * name the first soldier in the list, as often as not the player. You're ahead: by how much. Level at
+ * the top: "Tied 3–3". Someone else ahead: their name and score.
+ */
+export interface LeadLine {
+  kind: 'none' | 'you' | 'tied' | 'rival';
+  /** "You lead by", "Tied", "Lead · Kemi", "Tied lead" */
+  label: string;
+  /** "2", "3–3", "5" */
+  score: string;
+  /** the phone's score strip, which has no room for a name: "Lead", "Tied" */
+  short: string;
+  /** beside it: "+2", nothing for a tie, "5" */
+  shortScore: string;
+  /** one rival ahead: the phone shows their portrait for the name (−1: no one) */
+  faceId: number;
+}
+
+export function leadLine(v: Pick<MatchView, 'myScore' | 'leaderScore' | 'leaderName' | 'rivalScore' | 'rivalName' | 'rivalId' | 'rivalsTied'>): LeadLine {
+  const mine = v.myScore;
+  const rival = v.rivalScore ?? v.leaderScore;
+  if (Math.max(mine, rival) <= 0) return { kind: 'none', label: '', score: '', short: '', shortScore: '', faceId: -1 };
+  if (mine > rival) return { kind: 'you', label: 'You lead by', score: String(mine - rival), short: 'Lead', shortScore: `+${mine - rival}`, faceId: -1 };
+  if (mine === rival) return { kind: 'tied', label: 'Tied', score: `${mine}–${rival}`, short: 'Tied', shortScore: '', faceId: -1 };
+  if (v.rivalsTied) return { kind: 'rival', label: 'Tied lead', score: String(rival), short: 'Lead', shortScore: String(rival), faceId: -1 };
+  const name = v.rivalName ?? v.leaderName;
+  return { kind: 'rival', label: name ? `Lead · ${name}` : 'Lead', score: String(rival), short: 'Lead', shortScore: String(rival), faceId: v.rivalId ?? -1 };
 }
 
 /** A name next to a Bot badge: the bots' own "[BOT] " tag (packages/bots) is left to the badge. */

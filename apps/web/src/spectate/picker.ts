@@ -29,7 +29,7 @@ export class SpectatePicker {
       rows
         .map(
           (r) =>
-            `<li><button type="button" class="mf-spec-pick__row${r.followed ? ' is-on' : ''}${r.alive ? '' : ' is-down'}" data-spec-follow="${r.id}"><i class="mf-spec-pick__dot" aria-hidden="true"></i><span class="mf-spec-pick__name">${escapeHtml(r.name)}</span><span class="mf-spec-pick__kd num">${r.alive ? `${r.kills} / ${r.deaths}` : 'Down'}</span></button></li>`,
+            `<li><button type="button" class="mf-spec-pick__row${r.followed ? ' is-on' : ''}${r.alive ? '' : ' is-down'}" data-spec-follow="${r.id}"><i class="mf-spec-pick__dot" aria-hidden="true"></i><span class="mf-spec-pick__name">${escapeHtml(r.name)}</span>${r.bot ? '<span class="tag tag--bot">Bot</span>' : ''}<span class="mf-spec-pick__kd num">${r.alive ? `${r.kills} / ${r.deaths}` : 'Down'}</span></button></li>`,
         )
         .join('');
   }

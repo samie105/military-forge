@@ -26,6 +26,8 @@ import './minimap.css';
 
 /** desktop: the kit's 1920 × 1080 design px; phone: 812 × 375 */
 const DESK = { w: 1920, h: 1080, width: 300, minH: 96, maxH: 168, x: 32, y: 28 } as const;
+/** how far the HP and fuel labels stand above the move dial's box (design px: touch.css) */
+const DIAL_LABELS = 34;
 /** the smallest head the minimap draws, in page px: its label is 0.52 of it, so never under 12 px */
 const MIN_HEAD_PX = 23;
 /** the big map, design px: centred; on a phone, between the thumb dials */
@@ -323,11 +325,16 @@ export class Minimap {
       if (now - this.lastPlace > PLACE_MS) {
         this.lastPlace = now;
         const controls: { left: number; top: number; right: number; bottom: number }[] = [];
+        const clear: typeof controls = [];
         for (const c of document.querySelectorAll<HTMLElement>('.mf-touch .mf-ctl:not(.mf-off)')) {
           const r = logicalRect(c);
-          if (r.width > 0) controls.push({ left: r.left / scale, top: r.top / scale, right: r.right / scale, bottom: r.bottom / scale });
+          if (r.width <= 0) continue;
+          const box = { left: r.left / scale, top: r.top / scale, right: r.right / scale, bottom: r.bottom / scale };
+          controls.push(box);
+          // the small map keeps clear of the HP and fuel labels too, above the move dial's box
+          clear.push(c.classList.contains('mf-ctl-move') ? { ...box, top: box.top - DIAL_LABELS } : box);
         }
-        const p = phonePlace(controls, aspect);
+        const p = phonePlace(clear, aspect);
         this.place = { ...p, scale };
         this.bigPlace = bigPhonePlace(controls);
         this.moveFeed(p);
@@ -341,7 +348,10 @@ export class Minimap {
       y = DESK.y;
     }
     // the head's label stays readable (≥ 12 px type: 23 px of head) however small the window
-    const head = Math.max(MIN_HEAD_PX, (this.phone ? HEAD.phone : HEAD.desk) * scale);
+    // a phone's small map keeps its head for a map's tiers only: the map's name never fitted, and it's on the VS strip and the pause menu
+    const bare = this.phone && !mapTiers(map);
+    this.small.root.classList.toggle('mf-mm--bare', bare);
+    const head = bare ? 0 : Math.max(MIN_HEAD_PX, (this.phone ? HEAD.phone : HEAD.desk) * scale);
     this.size(this.small, x * scale, y * scale, w * scale, Math.max(h * scale, head + 40), head);
     this.clearHud(this.phone ? null : (y * scale + Math.max(h * scale, head + 40)));
     if (this.bigOpen) {

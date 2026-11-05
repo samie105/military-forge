@@ -37,6 +37,7 @@ import { arcDots, type ThrowArcView } from './throwPreview';
 import { AIM_SURE_SPREAD, aimLineStrength, type AimLineView } from './aimLine';
 import type { CloudView, Frame, GrenadeView, PickupView, PlayerView, RewindView } from './view';
 import { markColourCss, type Relation } from './teams/marking';
+import { playerName } from './shell/matchView';
 
 interface Tracer {
   ox: number;
@@ -815,7 +816,7 @@ export class Renderer {
     const ctx = this.ctx;
     const cam = this.camera;
     const t = this.tuningRef();
-    const name = this.names.get(p.id) ?? p.name;
+    const name = playerName(this.names.get(p.id) ?? p.name, p.isBot);
     if (!p.alive) {
       const sx = cam.toScreenX(p.x);
       const sy = cam.toScreenY(p.y + 0.4);
@@ -963,9 +964,10 @@ export class Renderer {
     ctx.shadowColor = 'rgba(0,0,0,0.9)';
     ctx.shadowBlur = 4;
     // yours: no name over your head
-    const name = rel === 'self' ? '' : (this.names.get(p.id) ?? p.name);
+    const name = rel === 'self' ? '' : playerName(this.names.get(p.id) ?? p.name, p.isBot);
     if (name) ctx.fillText(name, sx, sy - 7, 110);
     ctx.shadowBlur = 0;
+    if (name && p.isBot) this.drawBotChip(sx + Math.min(110, ctx.measureText(name).width) / 2 + 4, sy - 17);
     if ((rel === 'ally' || rel === 'enemy') && name) {
       // the shape, left of the name: colour is never the only cue
       const half = Math.min(110, ctx.measureText(name).width) / 2;
@@ -978,6 +980,24 @@ export class Renderer {
       ctx.font = 'bold 10px ui-monospace, monospace';
       ctx.fillText(status, sx, sy - 19);
     }
+  }
+
+  /** The kit's tag--bot on the canvas, right of a bot's name (the same chip as the feed, the lobby and the scoreboard). */
+  private drawBotChip(x: number, y: number): void {
+    const ctx = this.ctx;
+    const font = ctx.font;
+    ctx.font = 'bold 9px ui-monospace, monospace';
+    const w = ctx.measureText('BOT').width + 6;
+    ctx.fillStyle = 'rgba(5,8,8,0.82)';
+    ctx.fillRect(x, y, w, 12);
+    ctx.strokeStyle = 'rgba(242,238,223,0.45)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 11);
+    ctx.fillStyle = '#f2eedf';
+    ctx.textAlign = 'left';
+    ctx.fillText('BOT', x + 3, y + 9);
+    ctx.textAlign = 'center';
+    ctx.font = font;
   }
 
   /**

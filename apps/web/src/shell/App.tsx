@@ -19,7 +19,7 @@ import { ControllerContext, useCtl } from './context';
 import type { ShellController } from './controller';
 import type { MapEventBanner as MapEventBannerView } from './mapEventBanner';
 import { holdLoading } from './mapLoading';
-import { formatClock, type MatchView } from './matchView';
+import { formatClock, leadLine, type MatchView } from './matchView';
 import { AgeGate } from './screens/AgeGate';
 import { Alert, Connecting, MapLoading, ReconnectBanner, connectStep, useNetCause } from './screens/Connection';
 import { Countdown, useCountdown } from './screens/Countdown';
@@ -478,6 +478,7 @@ function DebugScreens({ store }: { store: ShellStore }) {
 }
 
 export function DebugClock({ view }: { view: MatchView }) {
+  const lead = leadLine(view);
   return (
     <>
       <div className="hud-clock plate">
@@ -490,10 +491,12 @@ export function DebugClock({ view }: { view: MatchView }) {
           <span className="hud-label">You</span>
           <b className="num">{view.myScore}</b>
         </div>
-        <div className="hud-score__cell plate">
-          <span className="hud-label">Leader{view.leaderName ? ` · ${view.leaderName}` : ''}</span>
-          <b className="num">{view.leaderScore}</b>
-        </div>
+        {lead.kind !== 'none' && (
+          <div className="hud-score__cell plate">
+            <span className="hud-label">{lead.label}</span>
+            <b className="num">{lead.score}</b>
+          </div>
+        )}
       </div>
     </>
   );

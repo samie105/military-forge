@@ -98,8 +98,8 @@ const joinedAt = Date.now();
 await waitToken(b.page, 'spec-watch');
 check(true, `B watches (the spectator bar is up ${((Date.now() - joinedAt) / 1000).toFixed(1)} s after Watch)`);
 check(!(await tokens(b.page)).includes('alive'), 'B has no soldier of its own');
-const delay = await text(b.page, '.mf-hud-desktop .mf-spec-tag--delay');
-check(/3 s delay/i.test(delay ?? ''), `B's feed runs 3 s behind ("${delay}")`);
+const delay = await text(b.page, '.mf-hud-desktop .mf-spec__who .hud-label');
+check(/3 s behind/i.test(delay ?? ''), `B's feed runs 3 s behind ("${delay}")`);
 await waitToken(b.page, 'spec-target', 30_000);
 check(true, 'B follows a soldier once the feed starts');
 
@@ -133,7 +133,7 @@ await (await c.page.waitForSelector('.pm-join__watch:not([disabled])', { visible
 await waitToken(c.page, 'spec-target');
 await sleep(1500);
 await c.page.screenshot({ path: join(out, 'phone-spectator.png') });
-const watching = await text(b.page, '.mf-hud-desktop .mf-spec-tag--eyes');
+const watching = await text(b.page, '.mf-hud-desktop .mf-spec__eyes');
 check(/2 watching/.test(watching ?? ''), `two spectators in the room ("${watching}")`);
 await c.page.tap('.mf-spec-pill--free');
 await waitToken(c.page, 'spec-free', 5000);

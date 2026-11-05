@@ -22,7 +22,7 @@ import { SpectateQueue } from '@military-forge/protocol';
 import type { SpectateView } from '../spectate/director';
 import { DRAGON, GAS, HitZone, NO_WEAPON, POWER_WEAPONS, defaultTuning, grenades, weapons, type Tuning } from '@military-forge/content';
 import type { MatchView } from '../shell/matchView';
-import { formatClock, playerName } from '../shell/matchView';
+import { formatClock, leadLine, playerName } from '../shell/matchView';
 import { capText, iconHref, weaponIcon } from '../ui/icons';
 import { drawButtonCap } from '../gamepad/caps';
 import { isPadCode } from '../gamepad/glyphs';
@@ -292,8 +292,16 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   v['match.timeLeft'] = m && playing ? formatClock(m.untimed ? m.secondsElapsed : m.secondsLeft) : '';
   v['match.limit'] = m ? (m.killLimit > 0 ? `First ${teamed ? 'team ' : ''}to ${m.killLimit}` : m.untimed ? 'No time limit' : 'No kill limit') : '';
   v['match.myScore'] = String(m?.myScore ?? 0);
-  v['match.leaderShort'] = m?.leaderName || 'Leader';
-  v['match.leaderScore'] = String(m?.leaderScore ?? 0);
+  // the countdown: the plates wait for GO (hud.css), the VS strip and the ring have the screen
+  on('countdown', m?.phase === MatchPhase.Countdown);
+  const lead = m ? leadLine(m) : null;
+  on('lead-chip', !!lead && lead.kind !== 'none');
+  on('lead-face', !!lead && lead.faceId >= 0);
+  v['match.leadLabel'] = lead?.label ?? '';
+  v['match.leadScore'] = lead?.score ?? '';
+  v['match.leadShort'] = lead?.short ?? '';
+  v['match.leadShortScore'] = lead?.shortScore ?? '';
+  v['match.leadFace'] = lead && lead.faceId >= 0 ? `${lead.faceId}:${lead.shortScore}` : '';
 
   // the map event (docs/02 §20.7) as a sequence: the warning with its countdown, the impact as it
   // starts, the strip while it runs, the all-clear after (EventTimeline); its screen treatment by kind
@@ -644,7 +652,9 @@ function spectateValues(sp: SpectateView | null, on: (token: string, yes: boolea
   const queued = !!sp && sp.queue !== SpectateQueue.Watching;
   on('spec-queued', queued);
   on('spec-slot', !!sp && sp.slots > 0);
-  v['spectate.label'] = !sp ? '' : sp.kind === 'death' ? 'Death cam' : sp.free ? 'Overview' : 'Watching';
+  on('spec-bot', !!sp?.bot);
+  const behind = sp && sp.kind === 'watch' && sp.delay > 0 ? ` · ${Number.isInteger(sp.delay) ? sp.delay : sp.delay.toFixed(1)} s behind` : '';
+  v['spectate.label'] = !sp ? '' : sp.kind === 'death' ? 'Death cam' : `${sp.free ? 'Overview' : 'Watching'}${behind}`;
   v['spectate.name'] = sp?.name ?? '';
   v['spectate.line'] = sp?.line ?? '';
   v['v.specHp'] = fixed(sp?.hp ?? 0);
@@ -652,9 +662,6 @@ function spectateValues(sp: SpectateView | null, on: (token: string, yes: boolea
   v['spectate.queued'] = queued ? 'yes' : 'no';
   v['spectate.join'] = queued ? 'Queued · cancel' : (sp?.slots ?? 0) > 0 ? 'Jump in now' : 'Join next round';
   v['spectate.joinShort'] = queued ? 'Queued' : (sp?.slots ?? 0) > 0 ? 'Jump in' : 'Join';
-  const delay = sp && sp.kind === 'watch' && sp.delay > 0 ? `${Number.isInteger(sp.delay) ? sp.delay : sp.delay.toFixed(1)} s` : '';
-  v['spectate.delay'] = delay ? `${delay} delay` : '';
-  v['spectate.delayShort'] = delay;
   v['spectate.watching'] = sp && sp.watching > 0 ? `${sp.watching} watching` : '';
   v['spectate.watchingShort'] = sp && sp.watching > 0 ? String(sp.watching) : '';
 }
@@ -899,10 +906,13 @@ export class Hud {
   private belt: Belt = { set: '', state: '', items: new Map() };
   private reticleAt = '';
   private arcsAt = '';
+  /** the countdown: the scoreboard waits for GO, like the plates (it opened over the ring) */
+  private counting = false;
+  private leadFace = '';
   private readonly onKey = (e: KeyboardEvent) => {
     if (!this.scoreboardCodes.includes(e.code) || e.repeat) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
-    this.setScoreboard(e.type === 'keydown' && !this.blocked);
+    this.setScoreboard(e.type === 'keydown' && !this.blocked && !this.counting);
   };
   private readonly onBlur = () => this.setScoreboard(false);
   /** the crate card and the draw card show the swap only; their stats open on request (owner, 25 Oct) */
@@ -1145,6 +1155,8 @@ export class Hud {
     this.drawLoadout();
     this.drawQuick();
     feedTouchHud(values, tokens); // the phone's thumb dials wear these too (touch/skin.ts)
+    this.counting = input.match?.phase === MatchPhase.Countdown;
+    this.drawLeadFace(values['match.leadFace'] ?? '', input.match);
     this.fitRing();
     this.place(input);
     // the world tags of the screen that shows (the desktop's, or the phone's while the touch controls are up)
@@ -1163,6 +1175,16 @@ export class Hud {
       this.scoreboardAt = now;
       this.drawScoreboard(input.scoreRows(), input.match, fresh, tunedOnce(input.tuning, input.tuningBase ?? defaultTuning));
     }
+  }
+
+  /** The phone's score strip: the leading rival's portrait for their name; redrawn when they or their score change (a portrait may have been cached since). */
+  private drawLeadFace(key: string, match: MatchView | null | undefined): void {
+    if (key === this.leadFace) return;
+    this.leadFace = key;
+    const slot = this.root.querySelector('.pt-clock__face');
+    if (!slot) return;
+    if (key && match) slot.replaceChildren(avatarElement(document, match.rivalId ?? -1, match.rivalName ?? '', false));
+    else slot.replaceChildren();
   }
 
   // ---- banners (announcements; the map event has its own under the clock) ----

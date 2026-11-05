@@ -7,6 +7,7 @@ import { conditions, leaderLine, crateCompare, damageArc, dashHint, dashStatus, 
 import { StateTokens, stateMatches } from './state';
 import { HUD_VARS, hudTemplate } from './template';
 import type { NetStats } from '../view';
+import type { MatchView } from '../shell/matchView';
 
 const t = createTuning();
 const names = new Map([
@@ -302,6 +303,29 @@ describe('hudFrame', () => {
     const dead = hudFrame(input({ frame: { tick: 1, localId: 0, players: [{ ...me, alive: false, respawnTicks: 90 }], grenades: [] } }), { ...memory, death: { label: 'Taken out by', killer: 'Kemi', icon: '#icon-wpn-widow' } }).values;
     const crate = hudFrame(input(solo(me, { pickups: [{ id: 4, def: weaponPickup(WIDOW.index)!.index, x: me.x, y: me.y }] })), memory).values;
     expect([...bound].filter((k) => alive[k] === undefined && dead[k] === undefined && crate[k] === undefined)).toEqual([]);
+  });
+
+  it('the lead chip: nothing at 0–0, your lead, a tie, a rival (UX-31); the phone\'s strip has no name to cut (UX-33)', () => {
+    const playing = (over: Partial<MatchView>) => ({ phase: MatchPhase.InProgress, number: 1, secondsLeft: 222, untimed: false, secondsElapsed: 0, killLimit: 10, timeLimit: 300, countdownTotal: 3, mapName: 'Lunar Outpost', localId: 0, myScore: 0, leaderScore: 0, leaderName: 'Me', ready: false, votes: 0, humans: 1, voted: false, results: null, ...over });
+    const zero = hudFrame(input({ match: playing({ rivalScore: 0, rivalName: 'Kemi', rivalId: 2 }) }), memory);
+    expect(zero.tokens).not.toContain('lead-chip');
+    const you = hudFrame(input({ match: playing({ myScore: 5, leaderScore: 5, rivalScore: 3, rivalName: 'Kemi', rivalId: 2 }) }), memory);
+    expect(you.tokens).toContain('lead-chip');
+    expect(you.values).toMatchObject({ 'match.leadLabel': 'You lead by', 'match.leadScore': '2', 'match.leadShort': 'Lead', 'match.leadShortScore': '+2', 'match.leadFace': '' });
+    const tied = hudFrame(input({ match: playing({ myScore: 3, leaderScore: 3, rivalScore: 3, rivalName: 'Kemi', rivalId: 2 }) }), memory);
+    expect(tied.values).toMatchObject({ 'match.leadLabel': 'Tied', 'match.leadScore': '3–3', 'match.leadShort': 'Tied', 'match.leadShortScore': '' });
+    const rival = hudFrame(input({ match: playing({ myScore: 1, leaderScore: 4, leaderName: 'Kemi', rivalScore: 4, rivalName: 'Kemi', rivalId: 2 }) }), memory);
+    expect(rival.tokens).toEqual(expect.arrayContaining(['lead-chip', 'lead-face']));
+    expect(rival.values).toMatchObject({ 'match.leadLabel': 'Lead · Kemi', 'match.leadScore': '4', 'match.leadFace': '2:4' });
+    const html = hudTemplate();
+    expect(html).not.toContain('match.leaderShort');
+    expect(html).toContain('class="pt-clock__face" data-state="lead-face"');
+  });
+
+  it('the countdown: its own token, so the plates wait for GO (UX-30)', () => {
+    const at = (phase: MatchPhase) => hudFrame(input({ match: { phase, number: 1, secondsLeft: 3, untimed: false, secondsElapsed: 0, killLimit: 10, timeLimit: 300, countdownTotal: 3, mapName: 'Lunar Outpost', localId: 0, myScore: 0, leaderScore: 0, leaderName: '', ready: false, votes: 0, humans: 1, voted: false, results: null } }), memory).tokens;
+    expect(at(MatchPhase.Countdown)).toContain('countdown');
+    expect(at(MatchPhase.InProgress)).not.toContain('countdown');
   });
 
   it('the net plate reads ping, jitter, loss and the transport (and a compact line for phones)', () => {

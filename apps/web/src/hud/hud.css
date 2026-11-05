@@ -165,3 +165,10 @@ html.reduce-motion #hud { transition: none; }
 /* the death card's second line: how close it was (audit 2 P-05) */
 .respawn__detail { margin: 0; font-size: var(--fs-16); font-weight: var(--fw-semi); color: var(--c-text); opacity: .9; }
 .respawn__detail:empty { display: none; }
+
+/* the countdown: the plates, the world's tags and the reticle wait for GO, then come in from their edges
+   (P9; the animation runs each time the plates come back from display: none). The VS strip has the top
+   edge, the ring the centre (shell/screens/Countdown.tsx); the minimap waits too (main.ts). */
+#hud[data-active-state~="countdown"] :is(.hud, .mf-world, .feedback) { display: none; }
+#hud :is(.hud-tl, .hud-match, .pt-clock) { animation: m-edge-in var(--m-base) var(--ease-arrive) backwards; --m-from: 0 calc(var(--m-edge) * -1); }
+#hud :is(.hud-bl, .hud-br, .mf-loadout) { animation: m-edge-in var(--m-base) var(--ease-arrive) backwards; --m-from: 0 var(--m-edge); }

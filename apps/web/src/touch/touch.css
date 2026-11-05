@@ -105,7 +105,9 @@
 .mf-touch .mf-ctl .dial-btn--fire { background: color-mix(in srgb, var(--c-volt) 88%, transparent); border-color: var(--c-ink-950); }
 .mf-touch .mf-ctl .dial-btn--fire .ic { color: var(--c-volt-ink); width: 26px; height: 26px; }
 .dial-btn--fire .dial-btn__word { font: var(--fw-black) var(--fs-13)/1 var(--f-ui, inherit); letter-spacing: 0.1em; text-transform: uppercase; color: var(--c-volt-ink); }
-.dial-btn--fire .tb__sub { color: var(--c-volt-ink); }
+/* the counts on a button (grenades, the mag, fuel): the HUD's text on its plate, never a pale chip */
+.mf-touch .tb__sub { background: var(--c-plate-strong); color: var(--c-text); border-color: var(--c-plate-line); }
+.mf-touch .dial-btn--fire .tb__sub { background: var(--c-plate-strong); color: var(--c-text); }
 .mf-ctl-fireLeft .dial-btn--fire { width: 72px; height: 72px; }
 .mf-touch .mf-ctl.mf-down .dial-btn--fire { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-volt) 40%, transparent); }
 .mf-touch [data-active-state~='no-grenades'] .dial-btn--grenade > .ic { opacity: 0.45; }
@@ -325,3 +327,18 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
    throw arcs swung off the dial (the owner's iPhone, 24 Oct 2026). fill-box's centre is the circle's
    centre in every engine. */
 .mf-touch .dial__arcs :is(.dial__track, .dial__hp, .dial__fuel, .dial__throw) { transform-box: fill-box; transform-origin: center; }
+
+/* the gun in hand beside its ammo: its glyph and name on the dial's foot (the phone HUD had neither) */
+.mf-touch .dial__lbl--ammo { gap: 5px; white-space: nowrap; }
+.mf-touch .dial__lbl--ammo .ic--kf { width: 34px; height: 13px; flex: none; color: var(--c-text); }
+.mf-touch .dial__lbl--ammo .dial__gun { color: var(--c-text); font-size: var(--fs-12); letter-spacing: .06em; text-transform: uppercase; }
+/* large text: the name stays, the glyph gives up its room */
+html.mf-big-text .mf-touch .dial__lbl--ammo .ic--kf { display: none; }
+
+/* the countdown: only the two dials stay, a thumb may be on them already (held through to GO). The other
+   controls and the dials' labels wait, still answering a touch, and the screen is the VS strip, the ring and
+   its band (shell/screens/Countdown.tsx); they come back with GO. */
+.mf-touch [data-active-state~='countdown'] .mf-ctl:not(.mf-stick),
+.mf-touch [data-active-state~='countdown'] :is(.dial__lbl, .dial__tag) { opacity: 0; }
+.mf-touch .mf-ctl:not(.mf-stick) { transition: scale var(--m-fast) var(--ease-settle), opacity var(--m-base) var(--ease-arrive); }
+.mf-touch :is(.dial__lbl, .dial__tag) { transition: opacity var(--m-base) var(--ease-arrive); }

@@ -242,8 +242,10 @@
   html:not(.reduce-transparency):not(.gfx-low) #hud .mf-hud-desktop :is(.mf-evw__body, .mf-eva__row, .mf-eve) { background: var(--frost-fill-hud); backdrop-filter: blur(var(--blur-hud)); }
 }
 
-/* the phone: the same sequence, compact, under the clock; the respawn card and the arc warning step down while it shows */
-#hud .mf-hud-phone .mf-ev :is(.mf-evw, .mf-eva, .mf-eve) { top: calc(var(--safe-t) + 62px); }
+/* the phone: the same sequence, compact, under the clock and clear of the minimap beside it (which ends 84
+   px from the screen's top); the respawn card and the arc warning step down while it shows */
+#hud .mf-hud-phone { --ev-top: max(calc(var(--safe-t) + 78px), 88px); }
+#hud .mf-hud-phone .mf-ev :is(.mf-evw, .mf-eva, .mf-eve) { top: var(--ev-top); }
 #hud .mf-hud-phone .mf-evw { width: 340px; }
 #hud .mf-hud-phone .mf-evw__head { padding: 1px 10px; letter-spacing: .18em; border-radius: var(--r-xs) var(--r-md) 0 0; }
 #hud .mf-hud-phone .mf-evw__head .ic { display: none; }
@@ -274,8 +276,8 @@
 #hud .mf-hud-phone .mf-eva__time { font-size: var(--fs-24); }
 #hud .mf-hud-phone .mf-eva__bar { height: 4px; }
 #hud .mf-hud-phone .mf-eve__clear { display: none; }
-#hud[data-active-state~="ev-shown"] .ph .respawn { top: calc(var(--safe-t) + 138px); }
-#hud[data-active-state~="ev-shown"] .ph .mf-arcwarn { top: calc(var(--safe-t) + 106px); }
+#hud[data-active-state~="ev-shown"] .ph .respawn { top: calc(var(--ev-top) + 88px); }
+#hud[data-active-state~="ev-shown"] .ph .mf-arcwarn { top: calc(var(--ev-top) + 44px); }
 
 /* the screen treatment: under the HUD plates, over the world; in with the event, out with the all-clear */
 #hud .mf-evfx { position: absolute; inset: 0; z-index: var(--z-vignette); overflow: hidden; pointer-events: none; animation: mf-fx-in 420ms var(--ease-arrive) both; }

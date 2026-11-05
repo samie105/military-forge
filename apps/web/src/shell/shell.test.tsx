@@ -12,7 +12,7 @@ import { ShellController, type GameHost } from './controller';
 import { bannerOf, sameBanner } from './mapEventBanner';
 import { createShellStore, runCleanup } from './store';
 import { localMatchRules } from './localMatch';
-import { formatClock, matchView, ordinal, sameView, type MatchView } from './matchView';
+import { formatClock, leadLine, matchView, ordinal, sameView, type MatchView } from './matchView';
 import { matchGain } from './progress';
 import { READY_WORDS, isReady, readyCount, readyLine, type LobbyView } from './onlineView';
 import { Alert, connectStep, reconnectSecondsLeft } from './screens/Connection';
@@ -349,6 +349,53 @@ describe('results: a bot winner, the standings rows, the MVP rule (UX-40, UX-41)
   });
 });
 
+describe('the lead chip (UX-31)', () => {
+  const at = (myScore: number, rivalScore: number, over: Partial<MatchView> = {}) => leadLine(view({ myScore, leaderScore: Math.max(myScore, rivalScore), leaderName: 'Me', rivalScore, rivalName: 'Kemi', rivalId: 3, ...over }));
+
+  it('0–0: no chip, so it can\'t name the player themself', () => {
+    expect(at(0, 0).kind).toBe('none');
+    expect(at(0, 0).label).toBe('');
+    // nobody above zero (self-kills count down) is no lead either
+    expect(at(-1, 0).kind).toBe('none');
+    expect(at(-2, -1).kind).toBe('none');
+  });
+
+  it('you ahead: by how much, never your own name', () => {
+    expect(at(5, 3)).toMatchObject({ kind: 'you', label: 'You lead by', score: '2', short: 'Lead', shortScore: '+2', faceId: -1 });
+    // alone in the match
+    expect(at(1, 0, { rivalId: -1, rivalName: '' })).toMatchObject({ kind: 'you', score: '1' });
+  });
+
+  it('level at the top: Tied 3–3', () => {
+    expect(at(3, 3)).toMatchObject({ kind: 'tied', label: 'Tied', score: '3–3', short: 'Tied', shortScore: '', faceId: -1 });
+  });
+
+  it('someone else ahead: their name and score, the phone their portrait', () => {
+    expect(at(2, 5)).toMatchObject({ kind: 'rival', label: 'Lead · Kemi', score: '5', short: 'Lead', shortScore: '5', faceId: 3 });
+    expect(at(2, 5, { rivalsTied: true })).toMatchObject({ kind: 'rival', label: 'Tied lead', score: '5', faceId: -1 });
+  });
+
+  it('matchView finds the best of the others: you are never your own rival', () => {
+    const { game, me, match } = localMatch();
+    const kemi = game.addPlayer('Kemi');
+    const ade = game.addPlayer('[BOT] Ade');
+    match.step([]); // the roster comes from the game
+    ade.isBot = true;
+    const scores = (mine: number, k: number, a: number) => {
+      match.players[me.id]!.score = mine;
+      match.players[kemi.id]!.score = k;
+      match.players[ade.id]!.score = a;
+      return matchView(match, me.id);
+    };
+    expect(leadLine(scores(0, 0, 0)).kind).toBe('none');
+    expect(scores(4, 1, 2)).toMatchObject({ leaderName: 'You', rivalName: 'Ade', rivalScore: 2, rivalsTied: false });
+    expect(leadLine(scores(4, 1, 2)).label).toBe('You lead by');
+    expect(leadLine(scores(1, 3, 2)).label).toBe('Lead · Kemi');
+    expect(scores(1, 3, 3)).toMatchObject({ rivalScore: 3, rivalsTied: true });
+    expect(leadLine(scores(3, 3, 1)).score).toBe('3–3');
+  });
+});
+
 describe('countdown (screen 6)', () => {
   it('"Get ready" past three seconds, then 3, 2, 1; the rules line', () => {
     expect(countdownState(view({ phase: MatchPhase.Countdown, secondsLeft: 5 }))).toBe('match');
@@ -375,8 +422,10 @@ describe('countdown (screen 6)', () => {
     const html = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.Countdown, secondsLeft: 2, number: 2 })} state="2" bindings={defaultBindings()} />);
     expect(html).toContain('<ol class="mf-cd__steps" aria-hidden="true"><li class="is-done">Match 2</li><li class="is-done">3</li><li class="is-now">2</li><li>1</li><li>GO</li></ol>');
     expect(html).toMatch(/hold <kbd[^>]*>Tab<\/kbd> to see who&#x27;s in/);
+    // the stepper and the tip are one band; GO stands alone, the HUD's plates arriving round it (UX-30)
+    expect(html).toMatch(/<div class="mf-cd__band plate"><ol class="mf-cd__steps".*<p class="mf-cd__tip">/);
     const go = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.InProgress, number: 2 })} state="go" />);
-    expect(go).toContain('<li class="is-now">GO</li>');
+    expect(go).not.toContain('mf-cd__band');
   });
 
   it('GO says Go without an exclamation mark, and leaves instead of cutting out (audit 28 Oct)', () => {
@@ -385,7 +434,7 @@ describe('countdown (screen 6)', () => {
     expect(go).not.toContain('Go!');
     const leaving = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.InProgress, number: 1 })} state="go-leaving" />);
     expect(leaving).toContain('class="display cd__go m-p7 is-leaving">Go</b>');
-    expect(leaving).toContain('<li class="is-now">GO</li>');
+    expect(leaving).not.toContain('mf-cd__band');
   });
 });
 
@@ -894,6 +943,39 @@ describe("the host's tuning panel (pnpm playtest --tune)", () => {
     expect(html).toMatch(/pause__title pause__title--long">Match continues</);
     // Leave sits under the scrolling list, always in view
     expect(html).toMatch(/pause__list.*<\/div><div class="pause__end"><button[^>]*>.*Leave match/);
+  });
+
+  it('one item style in the desktop order; Leave apart in the danger colour, Send a report no thin strip, no volt mid-match (UX-12)', () => {
+    const menu = (screen: Parameters<typeof createShellStore>[0]) => {
+      const { ctl } = setup(true);
+      return renderToStaticMarkup(
+        <ControllerContext.Provider value={ctl}>
+          <Pause store={createShellStore(screen)} />
+        </ControllerContext.Provider>,
+      );
+    };
+    const training = menu({ screen: { name: 'training' }, match: view({ phase: MatchPhase.InProgress }) });
+    expect(training).toMatch(/Resume.*Settings.*Controls.*Tune the game.*First flight.*Send a report.*Quit training/);
+    expect(training).toContain('pause__leave');
+    expect(training).toContain('Tell us what went wrong');
+    expect(training).not.toContain('mf-report-btn');
+    const room = menu({ screen: { name: 'room', code: 'KMTXRA' }, lobby: roomLobby(false), match: view({ phase: MatchPhase.InProgress }) });
+    expect(room).toMatch(/Settings.*Controls.*Invite friends.*Send a report.*Leave match/);
+    expect(room).not.toContain('btn--volt');
+  });
+
+  it('the menu\'s score says who leads only once someone has scored, and never names you (UX-31)', () => {
+    const header = (over: Partial<MatchView>) => {
+      const { ctl } = setup(true);
+      return renderToStaticMarkup(
+        <ControllerContext.Provider value={ctl}>
+          <Pause store={createShellStore({ screen: { name: 'training' }, match: view({ phase: MatchPhase.InProgress, ...over }) })} />
+        </ControllerContext.Provider>,
+      );
+    };
+    expect(header({ myScore: 0, leaderScore: 0, leaderName: 'Atlas84', rivalScore: 0, rivalName: 'Kemi' })).not.toContain('Lead');
+    expect(header({ myScore: 5, leaderScore: 5, leaderName: 'Atlas84', rivalScore: 3, rivalName: 'Kemi' })).toContain('You lead by');
+    expect(header({ myScore: 2, leaderScore: 5, leaderName: 'Kemi', rivalScore: 5, rivalName: 'Kemi' })).toContain('Lead · Kemi');
   });
 });
 

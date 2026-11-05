@@ -68,7 +68,7 @@ export function skinHtml(id: ControlId): string {
   <span class="dial__base"></span><span class="dial__groove"></span>
   <span class="dial__fireline" aria-hidden="true"></span><span class="dial__cancel" aria-hidden="true"></span><span class="dial__tag" aria-hidden="true">Aim to shoot</span>
   <span class="dial__knob dial__knob--aim mf-knob">${ic('target', 'ic--sm')}</span>
-  <span class="dial__lbl dial__lbl--ammo" data-state="gun" data-tour="ammo"><b class="num" data-bind="player.slot.0.mag"></b><span>/<span data-bind="player.slot.0.magSize"></span></span></span>
+  <span class="dial__lbl dial__lbl--ammo" data-state="gun" data-tour="ammo"><svg class="ic--kf" aria-hidden="true"><use data-bind-attr="href: player.slot.0.icon"/></svg><span class="dial__gun" data-bind="player.slot.0.name"></span><b class="num" data-bind="player.slot.0.mag"></b><span>/<span data-bind="player.slot.0.magSize"></span></span></span>
   <span class="dial__mode" data-state="grenade-aim">Aim the arc</span>
 </div>`;
     case 'shield':

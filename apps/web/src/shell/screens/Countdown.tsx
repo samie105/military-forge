@@ -3,7 +3,8 @@
  * begins the screen floods from the button that started it (P6) and the map intro shows for 1.6 s;
  * then "Match 1" (P1) while more than three seconds are left, 3, 2, 1 in a ring that empties (each
  * focus-pulls in), and GO stamps (P7) for a moment once play starts. Over the live game; it never
- * takes the mouse.
+ * takes the mouse. One composition: the VS strip has the top edge, the ring the centre, the stepper and
+ * the tip one band at the foot; the HUD's plates and the minimap wait for GO (hud.css, main.ts).
  */
 import { MatchPhase } from '@military-forge/sim';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
@@ -238,7 +239,7 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
               </div>
             )}
             {n > 0 && (
-              <div className="cd__num" style={ring as CSSProperties}>
+              <div className="cd__num m-p1" style={ring as CSSProperties}>
                 {/* new keys every second restart the ring's and the number's animations (siblings: never the same key) */}
                 <svg key={`ring-${state}`} className="cd__ring mf-cd__ring" viewBox="0 0 200 200" aria-hidden="true">
                   <circle cx="100" cy="100" r="90" className="cd__track" />
@@ -250,19 +251,23 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
               </div>
             )}
             {/* the word in the game's voice (no exclamation mark); it stamps in, then leaves on --m-fast */}
-            {(state === 'go' || state === 'go-leaving') && <b className={`display cd__go m-p7${state === 'go-leaving' ? ' is-leaving' : ''}`}>Go</b>}
-            <CountdownSteps state={state} number={view.number} />
+            {goish && <b className={`display cd__go m-p7${state === 'go-leaving' ? ' is-leaving' : ''}`}>Go</b>}
           </div>
-          {!goish && bindings && touch && <p className="cd__hint plate">Tip: swipe the dash button any way · hold the grenade and drag to aim</p>}
-          {!goish && bindings && !touch && (
-            <p className="cd__hint plate">
-              Tip: <Kbd code={bindings.dash[0]} /> dash · hold <Kbd code={bindings.grenade[0]} /> to aim a grenade
-              {bindings.scoreboard[0] && (
-                <>
-                  {' · '}hold <Kbd code={bindings.scoreboard[0]} /> to see who's in
-                </>
+          {!goish && (
+            <div className="mf-cd__band plate">
+              <CountdownSteps state={state} number={view.number} />
+              {bindings && touch && <p className="mf-cd__tip">Tip: swipe the dash button any way · hold the grenade and drag to aim</p>}
+              {bindings && !touch && (
+                <p className="mf-cd__tip">
+                  Tip: <Kbd code={bindings.dash[0]} /> dash · hold <Kbd code={bindings.grenade[0]} /> to aim a grenade
+                  {bindings.scoreboard[0] && (
+                    <>
+                      {' · '}hold <Kbd code={bindings.scoreboard[0]} /> to see who's in
+                    </>
+                  )}
+                </p>
               )}
-            </p>
+            </div>
           )}
         </>
       )}

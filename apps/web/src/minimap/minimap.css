@@ -29,6 +29,7 @@
   }
 }
 .mf-mm--small { cursor: pointer; }
+.mf-mm--bare .mf-mm__head { display: none; }
 .mf-mm--small.mf-mm--open { border-color: var(--c-volt-line); }
 /* a phone: idle, it dims like the controls' Auto-fade; anything new lights it at once */
 .mf-mm--small.mf-mm--idle { opacity: .62; }

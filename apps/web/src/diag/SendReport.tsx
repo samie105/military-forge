@@ -21,8 +21,11 @@ const FAILED: Record<'offline' | 'busy' | 'error', string> = {
   error: 'It didn’t go. Try again.',
 };
 
-/** `context`: where it's sent from ("settings", "pause"), so the owner knows what the player was doing. */
-export function SendReport({ context, className = '' }: { context: string; className?: string }) {
+/**
+ * `context`: where it's sent from ("settings", "pause"), so the owner knows what the player was doing.
+ * `buttonClass`, `sub`: a menu's own item style and sub-line (the pause menus), in place of the small ghost button.
+ */
+export function SendReport({ context, className = '', buttonClass = 'btn btn--ghost btn--sm m-p8 mf-report-btn', sub }: { context: string; className?: string; buttonClass?: string; sub?: string }) {
   const [stage, setStage] = useState<Stage>({ s: 'idle' });
   const [note, setNote] = useState('');
   // the bot check's token, and its round (each token is good for one send)
@@ -45,9 +48,16 @@ export function SendReport({ context, className = '' }: { context: string; class
   };
   if (stage.s === 'idle')
     return (
-      <button type="button" className={`btn btn--ghost btn--sm m-p8 mf-report-btn ${className}`.trim()} onClick={() => setStage({ s: 'confirm' })}>
+      <button type="button" className={`${buttonClass} ${className}`.trim()} onClick={() => setStage({ s: 'confirm' })}>
         <Icon name="send" />
-        Send a report
+        {sub ? (
+          <span className="btn__stack">
+            Send a report
+            <span className="btn__sub">{sub}</span>
+          </span>
+        ) : (
+          'Send a report'
+        )}
       </button>
     );
   return (

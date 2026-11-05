@@ -1,11 +1,12 @@
 /**
  * 12 · Pause / Esc menu (round two's data-screen="pause"). Training really pauses behind it
- * (LocalMode.paused); an online match can't, and the menu says so ("Match continues"). Resume,
- * Invite friends (a room), Tune the game (the room's host, where the page offers it: pnpm playtest
- * --tune), Settings, the controls card, and Leave (asked once more: "Leave this match?"). Resume stays
- * at the top and Leave at the foot, always in view; the items between scroll when the plate can't
- * hold them, and the list's lower edge fades while there's more below. The game behind dims over
- * --m-fast, the menu focus-pulls in (P1) and its items rise in turn (P3).
+ * (LocalMode.paused); an online match can't, and the menu says so ("Match continues"). Resume, then one
+ * item style (icon, title, sub-line): Settings, Controls, a room's Comms, Players and Invite friends,
+ * Tune the game (the room's host, where the page offers it: pnpm playtest --tune), First flight, Send a
+ * report; Leave apart at the foot (asked once more: "Leave this match?"). The plate is as tall as its
+ * items; only when it can't hold them do they scroll, Resume and Leave staying in view, with a short fade
+ * and a chevron while there's more below. The game behind dims over --m-fast, the menu focus-pulls in
+ * (P1) and its items rise in turn (P3).
  */
 import { MatchPhase } from '@military-forge/sim';
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
@@ -15,7 +16,7 @@ import { ButtonFadeQuick } from './ButtonFade';
 import { Cap } from '../../ui/Kbd';
 import { Screen, blurAfter } from '../../ui/Screen';
 import { useCtl } from '../context';
-import { formatClock, type MatchView } from '../matchView';
+import { formatClock, leadLine, type MatchView } from '../matchView';
 import type { ShellStore } from '../store';
 import { ROOM_SLOTS } from './Lobby';
 import { inviteFriends } from '../../social/SocialLayer';
@@ -52,6 +53,8 @@ export function useMoreBelow(ref: RefObject<HTMLElement | null>): void {
     const check = () => el.classList.toggle('has-more', el.scrollHeight - el.scrollTop - el.clientHeight > 2);
     check();
     el.addEventListener('scroll', check, { passive: true });
+    // the items rise in (P3): while they do they overflow the list, so ask again once they've landed
+    el.addEventListener('animationend', check);
     const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(check);
     ro?.observe(el);
     for (const child of el.children) ro?.observe(child);
@@ -60,6 +63,7 @@ export function useMoreBelow(ref: RefObject<HTMLElement | null>): void {
     mo?.observe(el, { childList: true, subtree: true });
     return () => {
       el.removeEventListener('scroll', check);
+      el.removeEventListener('animationend', check);
       ro?.disconnect();
       mo?.disconnect();
     };
@@ -88,6 +92,8 @@ export function Pause({ store }: { store: ShellStore }) {
 
   const row = (i: number) => ({ '--i': i }) as CSSProperties;
   const leaveLabel = room ? (playing ? 'Leave match' : 'Leave room') : 'Quit training';
+  const lead = match ? leadLine(match) : null;
+  const item = 'btn btn--ink btn--block pause__btn m-p3 m-p8';
   return (
     <Screen name="pause" kind="game" states={[tune ? 'host' : 'guest', confirm ? 'confirm-leave' : 'menu', room ? 'online' : 'paused']} label="Menu" modal dialog>
       <div className="pause__dim mf-pause__dim" aria-hidden="true"></div>
@@ -100,86 +106,99 @@ export function Pause({ store }: { store: ShellStore }) {
             <b className="num" data-bind="match.myScore">
               {match.myScore}
             </b>{' '}
-            · <span className="hud-label">Lead{match.leaderName ? ` · ${match.leaderName}` : ''}</span>{' '}
-            <b className="num" data-bind="match.leaderScore">
-              {match.leaderScore}
-            </b>
+            {lead && lead.kind !== 'none' && (
+              <>
+                · <span className="hud-label">{lead.label}</span>{' '}
+                <b className="num" data-bind="match.leadScore">
+                  {lead.score}
+                </b>
+              </>
+            )}
           </p>
         )}
         <button className="btn btn--paper btn--xl btn--block pause__btn m-p3 m-p8" style={row(0)} type="button" autoFocus onClick={blurAfter(() => ctl.closeOverlay())}>
           <Icon name="play" />
           Resume
         </button>
-        {/* the items between Resume and Leave: they scroll when the plate can't hold them all */}
-        <div ref={list} className="pause__list">
-          {tour && (
-            <div className="pause__tour m-p3" style={row(1)}>
-              <button className="btn btn--ink btn--block pause__btn m-p8" type="button" onClick={blurAfter(() => ctl.restartTour())}>
-                <Icon name="rotate" />
-                Restart First flight
-              </button>
-              <button className="btn btn--ghost btn--block pause__btn m-p8" type="button" onClick={blurAfter(() => ctl.skipTour())}>
-                Skip training
-              </button>
-            </div>
-          )}
-          {room && (
-            <button className="btn btn--volt btn--xl btn--block pause__btn m-p3 m-p8" style={row(1)} type="button" onClick={blurAfter(() => inviteFriends(ctl, () => void ctl.shareLink(room)))}>
-              <Icon name="users-plus" />
+        {/* the items between Resume and Leave: they scroll only when the plate can't hold them all */}
+        <div className="pause__scroll">
+          <div ref={list} className="pause__list">
+            {tour && (
+              <>
+                <button className={item} style={row(1)} type="button" onClick={blurAfter(() => ctl.restartTour())}>
+                  <Icon name="rotate" />
+                  Restart First flight
+                </button>
+                <button className={item} style={row(1)} type="button" onClick={blurAfter(() => ctl.skipTour())}>
+                  <Icon name="arrow-right" />
+                  Skip training
+                </button>
+              </>
+            )}
+            <button className={item} style={row(1)} type="button" onClick={blurAfter(() => ctl.openSettings())}>
+              <Icon name="gear" />
               <span className="btn__stack">
-                Invite friends
-                <span className="btn__sub">
-                  {open} {open === 1 ? 'slot' : 'slots'} left · {playing ? 'they join the next match' : 'share the link'}
+                Settings
+                <span className="btn__sub">Sound, graphics, text size</span>
+              </span>
+            </button>
+            {/* a touch screen (a tablet): the buttons' fade, right here (the owner, 23 Oct) */}
+            <ButtonFadeQuick className="m-p3" />
+            <button className={item} style={row(2)} type="button" onClick={blurAfter(() => ctl.showTips())}>
+              <Icon name="keyboard" />
+              <span className="btn__stack">
+                Controls
+                <span className="btn__sub">Your keys and tips</span>
+              </span>
+            </button>
+            {/* voice (voice/Radio.tsx): the comms sheet, for the mouse, the keyboard and a controller */}
+            {room && <CommsButton className={item} />}
+            {/* the room's people: report, block, mute, the host's remove (audit-2 L-01, L-02, L-11) */}
+            {room && <PlayersButton className={item} />}
+            {room && (
+              <button className={item} style={row(3)} type="button" onClick={blurAfter(() => inviteFriends(ctl, () => void ctl.shareLink(room)))}>
+                <Icon name="users-plus" />
+                <span className="btn__stack">
+                  Invite friends
+                  <span className="btn__sub">
+                    {open} {open === 1 ? 'slot' : 'slots'} left · {playing ? 'they join the next match' : 'share the link'}
+                  </span>
                 </span>
-              </span>
-            </button>
-          )}
-          {tune && (
-            <button className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" style={row(2)} type="button" onClick={blurAfter(() => ctl.openTuning())}>
-              <Icon name="sliders" />
-              <span className="btn__stack">
-                Tune the game
-                <span className="btn__sub">{room ? 'Host · changes it for everyone' : 'Changes this training match'}</span>
-              </span>
-              {room && (
-                <span className="tag tag--host pause__tag">
-                  <Icon name="crown" />
-                  Host
+              </button>
+            )}
+            {tune && (
+              <button className={item} style={row(3)} type="button" onClick={blurAfter(() => ctl.openTuning())}>
+                <Icon name="sliders" />
+                <span className="btn__stack">
+                  Tune the game
+                  <span className="btn__sub">{room ? 'Host · changes it for everyone' : 'Changes this training match'}</span>
                 </span>
-              )}
-            </button>
-          )}
-          {/* voice (voice/Radio.tsx): the comms sheet, for the mouse, the keyboard and a controller */}
-          {room && <CommsButton className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" />}
-          {/* the room's people: report, block, mute, the host's remove (audit-2 L-01, L-02, L-11) */}
-          {room && <PlayersButton className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" />}
-          <button className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" style={row(3)} type="button" onClick={blurAfter(() => ctl.openSettings())}>
-            <Icon name="gear" />
-            Settings
-          </button>
-          {/* a touch screen (a tablet): the buttons' fade, right here (the owner, 23 Oct) */}
-          <ButtonFadeQuick className="m-p3" />
-          <SendReport context={room !== null ? 'pause: in a room' : 'pause: training'} className="m-p3" />
-          <button className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" style={row(4)} type="button" onClick={blurAfter(() => ctl.showTips())}>
-            <Icon name="keyboard" />
-            <span className="btn__stack">
-              Controls
-              <span className="btn__sub">Your keys and tips</span>
-            </span>
-          </button>
-          {/* training (not a room: it would leave the match): First flight again (audit N-20) */}
-          {screen.name === 'training' && !tour && (
-            <button className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" style={row(4)} type="button" onClick={blurAfter(() => ctl.startFlight())}>
-              <Icon name="target" />
-              <span className="btn__stack">
-                First flight
-                <span className="btn__sub">Learn the controls, about 90 s</span>
-              </span>
-            </button>
-          )}
+                {room && (
+                  <span className="tag tag--host pause__tag">
+                    <Icon name="crown" />
+                    Host
+                  </span>
+                )}
+              </button>
+            )}
+            {/* training (not a room: it would leave the match): First flight again (audit N-20) */}
+            {screen.name === 'training' && !tour && (
+              <button className={item} style={row(4)} type="button" onClick={blurAfter(() => ctl.startFlight())}>
+                <Icon name="target" />
+                <span className="btn__stack">
+                  First flight
+                  <span className="btn__sub">Learn the controls, about 90 s</span>
+                </span>
+              </button>
+            )}
+            <SendReport context={room !== null ? 'pause: in a room' : 'pause: training'} buttonClass={item} sub="Tell us what went wrong" />
+          </div>
+          <i className="pause__more" aria-hidden="true">
+            <Icon name="chev-down" size="sm" />
+          </i>
         </div>
         <div className="pause__end">
-          <button className="btn btn--ghost btn--xl btn--block pause__btn m-p3 m-p8" style={row(5)} type="button" onClick={blurAfter(() => setConfirm(true))}>
+          <button className="btn btn--ghost btn--block pause__btn pause__leave m-p3 m-p8" style={row(5)} type="button" onClick={blurAfter(() => setConfirm(true))}>
             <Icon name="door-out" />
             {leaveLabel}
           </button>

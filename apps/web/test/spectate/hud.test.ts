@@ -20,14 +20,14 @@ const input = (spectate: SpectateView | null): HudInput => ({
   scoreRows: () => null,
   spectate,
 });
-const watch: SpectateView = { kind: 'watch', followId: 3, free: false, x: 0, y: 0, zoom: 1, name: 'KEMI', hp: 0.6, line: 'Hammer .44 · 7 kills', delay: 3, watching: 4, queue: SpectateQueue.Watching, slots: 0, rows: [] };
+const watch: SpectateView = { kind: 'watch', followId: 3, free: false, x: 0, y: 0, zoom: 1, name: 'KEMI', bot: false, hp: 0.6, line: 'Hammer .44 · 7 kills', delay: 3, watching: 4, queue: SpectateQueue.Watching, slots: 0, rows: [] };
 
 describe('the spectator bar (v20)', () => {
-  it('a spectator (no player of its own) gets the bar, the tags and Join next round', () => {
+  it('a spectator (no player of its own) gets the bar, its label saying how far behind, and Join next round', () => {
     const { tokens, values } = hudFrame(input(watch), mem);
     expect(tokens).toEqual(expect.arrayContaining(['spectate-bar', 'spec-watch', 'spec-target']));
     expect(tokens).not.toContain('spec-death');
-    expect(values).toMatchObject({ 'spectate.label': 'Watching', 'spectate.name': 'KEMI', 'spectate.line': 'Hammer .44 · 7 kills', 'v.specHp': '0.6', 'spectate.delay': '3 s delay', 'spectate.watching': '4 watching', 'spectate.join': 'Join next round', 'spectate.freeLabel': 'Free cam' });
+    expect(values).toMatchObject({ 'spectate.label': 'Watching · 3 s behind', 'spectate.name': 'KEMI', 'spectate.line': 'Hammer .44 · 7 kills', 'v.specHp': '0.6', 'spectate.watching': '4 watching', 'spectate.join': 'Join next round', 'spectate.freeLabel': 'Free cam' });
   });
 
   it('a free slot says Jump in now; queued says so; the free camera says Follow', () => {
@@ -37,7 +37,7 @@ describe('the spectator bar (v20)', () => {
     expect(q.tokens).toContain('spec-queued');
     const free = hudFrame(input({ ...watch, free: true, followId: -1, name: 'Free camera' }), mem);
     expect(free.values['spectate.freeLabel']).toBe('Follow');
-    expect(free.values['spectate.label']).toBe('Overview');
+    expect(free.values['spectate.label']).toBe('Overview · 3 s behind');
     expect(free.tokens).not.toContain('spec-target');
   });
 
@@ -46,8 +46,22 @@ describe('the spectator bar (v20)', () => {
     expect(d.tokens).toEqual(expect.arrayContaining(['spectate-bar', 'spec-death']));
     expect(d.tokens).not.toContain('spec-watch');
     expect(d.values['spectate.label']).toBe('Death cam');
-    expect(d.values['spectate.delay']).toBe('');
     expect(hudFrame(input(null), mem).tokens).not.toContain('spectate-bar');
+  });
+
+  it('no delay, no "behind"; a bot takes the Bot chip, never a tag in its name (UX-32)', () => {
+    expect(hudFrame(input({ ...watch, delay: 0 }), mem).values['spectate.label']).toBe('Watching');
+    expect(hudFrame(input({ ...watch, bot: true }), mem).tokens).toContain('spec-bot');
+    expect(hudFrame(input(watch), mem).tokens).not.toContain('spec-bot');
+    const html = hudTemplate();
+    expect(html.match(/<span class="tag tag--bot" data-state="spec-bot">Bot<\/span>/g)!.length).toBe(2);
+  });
+
+  it('the tags that sat under the minimap are gone: the delay is the bar\'s label (UX-32)', () => {
+    const html = hudTemplate();
+    expect(html).not.toContain('mf-spec-tags');
+    expect(html).not.toContain('mf-spec-tag--delay');
+    expect(html).not.toContain('spectate.delay');
   });
 
   it('the bar\'s buttons carry their hooks on both screens', () => {

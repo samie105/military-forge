@@ -338,7 +338,27 @@ describe('m-pause', () => {
     expect(html).toContain('Online play can&#x27;t pause');
     expect(html).toMatch(/pm-pause__t[^>]*>Match continues</);
     expect(html).not.toContain('>Paused<');
-    expect(html).toMatch(/pm-pause__list.*<\/div><button[^>]*pm-pause__leave[^>]*>.*Leave match/);
+  });
+
+  it('two plates: the head, sitrep, Resume and Leave on the left; every other item, in one style, on the right (UX-12)', () => {
+    const html = withCtl(ctl({ canTune: () => true }), <PhonePause store={store(true)} />);
+    expect(html).toMatch(/<nav class="pm-pause [^>]*>.*Resume.*Leave match.*<\/nav><div class="pm-pause__list /);
+    const list = html.slice(html.indexOf('pm-pause__list'));
+    for (const t of ['Settings', 'Controls', 'Invite friends', 'Tune the game', 'Send a report']) expect(list).toContain(t);
+    // a match isn't the place for a volt item, or a thin one
+    expect(html).not.toContain('btn--volt');
+    expect(html).not.toContain('mf-report-btn');
+    // training: Settings, Controls and First flight, no room's items
+    const solo = withCtl(ctl(), <PhonePause store={store(false)} />);
+    expect(solo).toMatch(/Settings.*Controls.*First flight.*Send a report/);
+  });
+
+  it('the sitrep says who leads only once someone has scored, and never names you (UX-31)', () => {
+    const at = (over: Partial<MatchView>) =>
+      withCtl(ctl(), <PhonePause store={createShellStore({ screen: { name: 'training' }, match: view({ phase: MatchPhase.InProgress, secondsLeft: 222, ...over }) })} />);
+    expect(at({ myScore: 0, leaderScore: 0, leaderName: 'Me', rivalScore: 0, rivalName: 'Kemi' })).not.toContain('pm-score__lead');
+    expect(at({ myScore: 5, leaderScore: 5, leaderName: 'Me', rivalScore: 3, rivalName: 'Kemi' })).toContain('You lead by');
+    expect(at({ myScore: 3, leaderScore: 3, leaderName: 'Me', rivalScore: 3, rivalName: 'Kemi' })).toContain('3–3');
   });
 });
 

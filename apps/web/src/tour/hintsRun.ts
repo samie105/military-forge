@@ -108,11 +108,12 @@ export class HintRunner {
     if (out && !this.outOfFuel) this.engine.fuelOut();
     this.outOfFuel = out;
     if (this.showing) {
-      if (this.clock() - this.showing.at > HINT_SHOW_MS || this.d.quiet()) this.hide();
+      // not over the death card: a tip goes when its reader does
+      if (this.clock() - this.showing.at > HINT_SHOW_MS || this.d.quiet() || !this.alive) this.hide();
       else this.spot.update();
       return;
     }
-    if (this.d.quiet() || this.phase !== MatchPhase.InProgress) return;
+    if (this.d.quiet() || this.phase !== MatchPhase.InProgress || !this.alive) return;
     this.engine.offer(this.d.touch?.possible() ?? []);
     const def = this.engine.next(t);
     if (def) this.show(def);

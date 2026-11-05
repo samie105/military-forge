@@ -9,7 +9,7 @@ export const PHONE = { w: 812, h: 375, safeL: 44, safeT: 10 } as const;
 export const HEAD = { desk: 26, phone: 16 } as const;
 /** phone sizes (design px) and where they may sit, tried in order until one is clear of the controls */
 const PHONE_SIZES = [
-  { w: 176, maxH: 72 },
+  { w: 168, maxH: 72 },
   { w: 132, maxH: 46 },
 ] as const;
 const PHONE_SLOTS = [
@@ -18,6 +18,8 @@ const PHONE_SLOTS = [
   // the default layout): a short screen (the browser's bars showing) has no room lower down (the
   // mobile audit, P1-10)
   { x: PHONE.safeL + 58, y: PHONE.safeT + 2 },
+  // the same, on a smaller phone, where the scores button is larger in these design px
+  { x: PHONE.safeL + 76, y: PHONE.safeT + 2 },
   { x: PHONE.safeL + 8, y: PHONE.safeT + 132 },
 ] as const;
 export interface Box {

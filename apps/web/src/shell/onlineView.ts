@@ -155,6 +155,10 @@ export function onlineMatchView(src: OnlineSource, now = performance.now()): Mat
   const untimed = s.phase === MatchPhase.InProgress && length === 0;
   let leaderScore = 0;
   let leaderName = '';
+  let rivalScore = 0;
+  let rivalName = '';
+  let rivalId = -1;
+  let rivalsTied = false;
   let myScore = 0;
   s.standings.forEach((r, i) => {
     if (i === 0 || r.score > leaderScore) {
@@ -162,6 +166,14 @@ export function onlineMatchView(src: OnlineSource, now = performance.now()): Mat
       leaderName = playerName(r.name, r.isBot);
     }
     if (r.id === me && !r.left) myScore = r.score;
+    else if (!r.left) {
+      if (rivalId < 0 || r.score > rivalScore) {
+        rivalScore = r.score;
+        rivalName = playerName(r.name, r.isBot);
+        rivalId = r.id;
+        rivalsTied = false;
+      } else if (r.score === rivalScore) rivalsTied = true;
+    }
   });
   const mine = s.lobby.find((p) => p.id === me);
   const humans = s.lobby.filter((p) => !s.standings.find((r) => r.id === p.id && !r.left)?.isBot).length;
@@ -179,6 +191,10 @@ export function onlineMatchView(src: OnlineSource, now = performance.now()): Mat
     myScore,
     leaderScore,
     leaderName,
+    rivalScore,
+    rivalName,
+    rivalId,
+    rivalsTied,
     ready: mine?.ready ?? false,
     votes: s.lobby.filter((p) => p.rematch).length,
     humans,

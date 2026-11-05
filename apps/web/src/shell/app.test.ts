@@ -219,6 +219,7 @@ describe('online match and lobby views', () => {
     // a bot leading: the HUD's leader line names it without the "[BOT]" tag (review M3)
     const botLeads = state({ standings: [{ ...withBot.standings[2]!, score: 9 }, ...state().standings] });
     expect(onlineMatchView(source(botLeads))!.leaderName).toBe('Badger');
+    expect(onlineMatchView(source(botLeads))).toMatchObject({ rivalName: 'Badger', rivalScore: 9, rivalsTied: false });
   });
 });
 

@@ -63,7 +63,7 @@ function desktop(): string {
       <div class="hud-clock plate" data-state="match" data-tour="clock"><span class="hud-label" data-bind="match.mode"></span><b class="hud-clock__time num" data-bind="match.timeLeft"></b><span class="hud-label" data-bind="match.limit"></span></div>
       <div class="hud-score" data-state="match" data-tour="scores">
         <div class="hud-score__cell plate is-you"><span class="hud-label">You</span><b class="num" data-bind-roll="match.myScore"></b></div>
-        <div class="hud-score__cell plate"><span class="hud-label">Lead · <span data-bind="match.leaderShort"></span></span><b class="num" data-bind-roll="match.leaderScore"></b></div>
+        <div class="hud-score__cell plate" data-state="lead-chip"><span class="hud-label" data-bind="match.leadLabel"></span><b class="num" data-bind-roll="match.leadScore"></b></div>
       </div>
       <div class="mf-hud-banners" aria-live="polite"></div>
     </div>
@@ -200,18 +200,14 @@ function desktop(): string {
 
     <div class="mf-spec plate m-p9 m-p9--bottom" data-state="spectate-bar" role="group" aria-label="Spectating">
       <button type="button" class="mf-spec__nav" data-spec="prev" aria-label="Previous soldier">${ic('chev-left', 'ic--sm')}Prev<kbd class="kbd">Q</kbd></button>
-      <span class="mf-spec__who" role="status"><span class="hud-label" data-bind="spectate.label"></span><b class="display" data-bind="spectate.name"></b><i class="mf-spec__hp" data-state="spec-target" aria-hidden="true"></i><span class="mf-spec__line" data-bind="spectate.line"></span></span>
+      <span class="mf-spec__who" role="status"><span class="hud-label" data-bind="spectate.label"></span><span class="mf-spec__name"><b class="display" data-bind="spectate.name"></b><span class="tag tag--bot" data-state="spec-bot">Bot</span></span><i class="mf-spec__hp" data-state="spec-target" aria-hidden="true"></i><span class="mf-spec__line" data-bind="spectate.line"></span></span>
       <button type="button" class="mf-spec__nav" data-spec="next" aria-label="Next soldier"><kbd class="kbd">E</kbd>Next${ic('chev-right', 'ic--sm')}</button>
       <span class="mf-spec__sep" data-state="spec-watch" aria-hidden="true"></span>
       <button type="button" class="mf-spec__free" data-spec="free" data-state="spec-watch"><span data-bind="spectate.freeLabel"></span><kbd class="kbd">F</kbd></button>
       <span class="mf-spec__slot hud-label" data-state="spec-slot+spec-watch+!spec-queued">A slot is free</span>
+      <span class="mf-spec__eyes hud-label" data-bind-show="spectate.watching">${ic('eye', 'ic--sm')}<span data-bind="spectate.watching"></span></span>
       <button type="button" class="mf-spec__join" data-spec="join" data-state="spec-watch" data-bind-attr="data-queued: spectate.queued">${ic('play', 'ic--sm')}<span data-bind="spectate.join"></span><kbd class="kbd">↵</kbd></button>
     </div>
-    <div class="mf-spec-tags" data-state="spec-watch" aria-hidden="true">
-      <span class="mf-spec-tag plate"><i class="mf-spec-dot"></i>Spectating</span>
-      <span class="mf-spec-tag mf-spec-tag--delay plate" data-bind-show="spectate.delay"><i class="mf-spec-dot"></i><span data-bind="spectate.delay"></span></span>
-    </div>
-    <div class="mf-spec-tag mf-spec-tag--eyes plate" data-state="spectate-bar" data-bind-show="spectate.watching" aria-hidden="true">${ic('eye', 'ic--sm')}<span data-bind="spectate.watching"></span></div>
   </div>
 
   ${eventTemplate()}

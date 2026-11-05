@@ -139,7 +139,7 @@ try {
     await sleep(4000);
     await page.keyboard.press('Escape');
     await page.waitForSelector('[data-screen="m-pause"]', { timeout: 15_000 });
-    check(await visible(page, '.pm-pause__row .mf-install-btn'), "chrome: Install app in the pause menu's quick row");
+    check(await visible(page, '.pm-pause__list .mf-install-btn'), "chrome: Install app in the pause menu's items");
     await shot(page, 'chrome-pause-button');
     // install from there: the browser's prompt, accepted
     await clickText(page, 'nav', 'Install app');

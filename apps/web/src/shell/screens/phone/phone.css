@@ -121,7 +121,6 @@ html.reduce-motion .mf-fit--phone { --m-rise: 0px; }
 .pm-dim { position: absolute; inset: 0; background: var(--c-scrim); animation: pm-fade var(--m-fast) var(--ease-arrive) both; }
 @keyframes pm-fade { from { opacity: 0; } to { opacity: 1; } }
 .pm-pause .btn { min-height: var(--touch-min); }
-.pm-score .hud-label { white-space: nowrap; }
 
 /* ---- results ---- */
 /* a column taller than the phone starts at its top (UX-41: centred, its first line sat above the
@@ -181,9 +180,8 @@ html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
 .is-text-lg .pm-mvp { width: 220px; height: auto; align-self: stretch; }
 .is-text-lg .pm-mvp .mvp__big { display: none; }
 .is-text-lg .pm-res__more .btn, .is-text-lg .pm-bar .btn { padding-inline: 8px; }
-.is-text-lg .pm-pause { width: 380px; }
-.is-text-lg .pm-pause__row { flex-wrap: wrap; }
-.is-text-lg .pm-score { width: 300px; }
+.is-text-lg .pm-pause { --pm-left: 340px; }
+.is-text-lg .pm-pause__list { --pm-left: 340px; grid-template-columns: minmax(0, 1fr); }
 .is-text-lg .pm-score__row { flex-wrap: wrap; gap: 6px 14px; }
 .is-text-lg .pm > * { flex-shrink: 0; }
 /* the rules and Ready/Start stick to the screen's bottom together (the roster scrolls under them) */
@@ -442,9 +440,6 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 .pm-res:has(.mf-debrief) { overflow-y: auto; min-height: 0; scrollbar-width: none; overscroll-behavior: contain; }
 /* the room's radio (top right, voice.css) beside the debrief's first line (shown even with the Debrief), not over the headline */
 .pm-res.pm-res--radio > .eyebrow { display: flex; align-items: center; flex: none; min-height: calc(var(--touch-min, 48px) + 12px); padding-right: calc(var(--touch-min, 48px) * 2 + var(--sp-6)); }
-/* First flight: Restart it, or Skip training, side by side under Resume */
-.pm-pause__tour { display: flex; gap: 8px; }
-.pm-pause__tour .btn { flex: 1; min-height: var(--touch-min, 48px); }
 
 /* Settings › Touch › Advanced (the mobile audit, P0-5): folded until asked for */
 .pm-adv { border-top: 1px solid var(--c-line); margin-top: 6px; }
@@ -480,17 +475,31 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 .pm-roster__h { gap: 6px; }
 .is-text-lg .pm-lan__scan .pm-lan__how-code { font-size: calc(26px * var(--pm-head)); letter-spacing: 0.06em; }
 .pm-lan__scan .pm-lan__how-code { font-size: calc(34px * var(--pm-head)); }
-/* the pause menu: its head and Resume at the top, Leave at the foot, always in view (audit 28 Oct); the
-   items between scroll (Send a report opening at their foot too: diag/SendReport.tsx), their lower edge
-   fading while there's more below */
-.pm-pause { overflow: hidden; }
+/* the pause menu: two plates, each as tall as what's on it. Left: the head, the sitrep, Resume, Leave at
+   the foot. Right: every other item in two columns; it scrolls only when it can't hold them (Send a report
+   opening in it: diag/SendReport.tsx), with a short fade while there's more below */
+.pm-pause, .pm-pause__list { --pm-left: 280px; }
+.pm-pause { width: var(--pm-left); bottom: auto; max-height: calc(100% - var(--safe-t) - var(--safe-b)); overflow: hidden; }
 .pm-pause > * { flex: none; }
-.pm-pause > .pm-pause__list { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; margin-inline: -4px; padding-inline: 4px; }
-.pm-pause__list > * { flex: none; }
+.pm-pause .btn { padding-inline: 12px; gap: 8px; white-space: nowrap; }
+.pm-pause .eyebrow { white-space: nowrap; letter-spacing: 0.08em; }
+.pm-pause .eyebrow::before { display: none; }
+.pm-pause .pm-score { position: static; width: auto; padding: 0; gap: 2px; }
+.pm-score__lead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0; white-space: nowrap; }
+.pm-score__lead .hud-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pm-score__lead b { font: var(--fw-display) var(--fs-28)/1 var(--f-display); }
+.mf-fit--phone .pm-pause__leave { color: var(--c-hp); border-color: color-mix(in srgb, var(--c-hp) 55%, transparent); }
+.pm-pause__list { position: absolute; z-index: var(--z-panel); left: calc(var(--safe-l) + var(--pm-left) + 10px); right: var(--safe-r); top: var(--safe-t); max-height: calc(100% - var(--safe-t) - var(--safe-b)); padding: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.pm-pause__list .btn { justify-content: flex-start; min-height: var(--touch-min); padding-inline: 10px; gap: 8px; font-size: var(--fs-14); line-height: 1.1; text-align: left; white-space: normal; }
+/* the host's tag is its crown here: the item's two columns have no room for the word */
+.pm-pause__list .pm-pause__tag { margin-left: auto; font-size: 0; gap: 0; padding-inline: 6px; }
+.pm-pause__list .mf-install-btn:not(.mf-install-btn--icon) { background: var(--c-ink-700); border-color: var(--c-ink-950); box-shadow: var(--sh-press-sm), inset 0 0 0 var(--bw) var(--c-line-strong); }
+.pm-pause__list .mf-install-btn:not(.mf-install-btn--icon) .ic { color: inherit; }
+/* what takes the whole width: an open report, the buttons' fade, an item that would stand alone */
+.pm-pause__list :is(.mf-report, .pm-fadequick, .pm-report:nth-child(odd)) { grid-column: 1 / -1; }
 /* "Match continues" (online: it can't pause) on one line */
 .mf-fit--phone .pm-pause__t--long, .pm-pause__t--long { font-size: calc(32px * var(--pm-head, 1)); white-space: nowrap; }
-.pm-pause__list.has-more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); }
-.pm-pause .pm-report.mf-report-btn { align-self: flex-start; }
+.pm-pause__list.has-more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); }
 
 /* ---- one clear scroll area on a short landscape screen (the owner, 24 Oct: "on landscape … some
    things need to be scrolling properly"; scripts/landscape-overflow.mjs checks every screen) ----
@@ -506,9 +515,6 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
   @keyframes pm-edge-top { from { box-shadow: none; } to { box-shadow: 0 8px 12px -6px rgb(0 0 0 / .7); } }
   @keyframes pm-edge-bottom { from { box-shadow: 0 -8px 12px -6px rgb(0 0 0 / .7); } to { box-shadow: none; } }
 }
-/* the pause menu's quick row wraps (Settings and Install app) */
-.pm-pause__row { flex-wrap: wrap; }
-.pm-pause__row .btn { flex: 1 1 auto; }
 /* the sheet's foot fades while there's more below it (its head is sticky, so only the foot fades) */
 @property --pm-fade-b { syntax: '<length>'; inherits: false; initial-value: 0px; }
 @supports (animation-timeline: scroll()) {
