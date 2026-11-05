@@ -383,6 +383,12 @@ describe('site.sh: one Caddy for both environments', () => {
       rmSync(join(dir, 'refuse'));
       assert.equal(runSite(`${stubs}site_caddy`, env), '');
       assert.equal(readFileSync(caddyfile, 'utf8'), prod);
+      // production's site under two names: still production's site, and staging leaves it alone
+      const twoNames = prod.replace(/^(\S+) \{$/m, '$1, game.example.com {');
+      assert.notEqual(twoNames, prod);
+      writeFileSync(caddyfile, twoNames);
+      assert.equal(runSite(`${stubs}site_caddy`, env), '');
+      assert.equal(readFileSync(caddyfile, 'utf8'), twoNames);
       // no production site yet: staging refuses rather than write a Caddyfile of its own
       writeFileSync(caddyfile, '{\n}\n');
       assert.throws(() => runSite(`${stubs}site_caddy`, env), (e) => /set production up first/.test(e.stdout));

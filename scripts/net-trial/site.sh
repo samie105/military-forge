@@ -153,7 +153,7 @@ site_caddy() {
 site_caddy_staging() {
   local f=$SITES/staging.caddy c=${MF_CADDYFILE:-/etc/caddy/Caddyfile} imp
   imp="import $SITES/*.caddy"
-  grep -q "^[^[:space:]#][^[:space:]]* {\$" "$c" || { echo "no production site in $c: set production up first"; return 1; }
+  grep -q "^[^[:space:]#{][^{]* {\$" "$c" || { echo "no production site in $c: set production up first"; return 1; }
   mkdir -p "$SITES"
   site_caddyfile >"$f.new" || return 1
   if cmp -s "$f.new" "$f" && grep -qxF "$imp" "$c"; then rm "$f.new"; return 0; fi

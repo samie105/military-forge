@@ -115,7 +115,8 @@ for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed
 S=$SRC/scripts/net-trial/site.sh
 stg_ok() { [ -z "$STG" ] || grep -qs site_caddy_staging "$S"; }
 [ -f "$WEB/index.html" ] || page "$WEB/index.html" 'Setting up' 1 "<p>Setting up: <a href=\"/trial-status/\">status</a></p>"
-if [ -f "$S" ] && stg_ok; then . "$S"; site_caddy || fail 'the Caddy config'
+# the last deploy's code: if it refuses while Caddy is serving, this commit's code gets its turn below
+if [ -f "$S" ] && stg_ok; then . "$S"; site_caddy || systemctl -q is-active caddy || fail 'the Caddy config'
 elif [ -z "$STG" ] && ! grep -qs "^$HOST {" /etc/caddy/Caddyfile; then
   t=''; [ "$TLS" = internal ] && t=$'\ttls internal\n'
   printf '{\n\tservers {\n\t\tprotocols h1 h2\n\t}\n%s}\n\n%s {\n%s\tredir / /trial-status/\n\theader Cache-Control no-store\n\troot * %s\n\tfile_server\n}\n' "${ACME_EMAIL:+	email $ACME_EMAIL
